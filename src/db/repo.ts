@@ -57,6 +57,26 @@ export function crearCampania(db: Database.Database, titulo: string): Campania {
   return campania;
 }
 
+export function obtenerCampania(db: Database.Database, id: string): Campania {
+  const fila = db.prepare('SELECT * FROM campania WHERE id = ?').get(id) as Campania | undefined;
+  if (!fila) throw new Error(`campaña no encontrada: ${id}`);
+  return fila;
+}
+
+export function campaniaMasReciente(db: Database.Database): Campania | null {
+  return (
+    (db.prepare('SELECT * FROM campania ORDER BY creada_en DESC LIMIT 1').get() as Campania | undefined) ?? null
+  );
+}
+
+export function capituloEnCursoDeCampania(db: Database.Database, campaniaId: string): Capitulo | null {
+  return (
+    (db
+      .prepare("SELECT * FROM capitulo WHERE campania_id = ? AND estado = 'en_curso' ORDER BY numero DESC LIMIT 1")
+      .get(campaniaId) as Capitulo | undefined) ?? null
+  );
+}
+
 export function crearCapitulo(
   db: Database.Database,
   datos: { campaniaId: string; numero: number; titulo?: string; escenasTotal: number },
@@ -200,4 +220,215 @@ export function actualizarEstadoNpc(
 ): Npc {
   db.prepare('UPDATE npc SET estado = ? WHERE id = ?').run(estado, npcId);
   return obtenerNpc(db, npcId);
+}
+
+export function actualizarNpc(
+  db: Database.Database,
+  npcId: string,
+  cambios: { estado?: Npc['estado']; hp?: number },
+): Npc {
+  const npc = obtenerNpc(db, npcId);
+  const estado = cambios.estado ?? npc.estado;
+  const hp = cambios.hp ?? npc.hp;
+  db.prepare('UPDATE npc SET estado = ?, hp = ? WHERE id = ?').run(estado, hp, npcId);
+  return obtenerNpc(db, npcId);
+}
+
+export function personajesDeCampania(db: Database.Database, campaniaId: string): Personaje[] {
+  return db.prepare('SELECT * FROM personaje WHERE campania_id = ?').all(campaniaId) as Personaje[];
+}
+
+export function npcsVivosDeCampania(db: Database.Database, campaniaId: string): Npc[] {
+  return db
+    .prepare("SELECT * FROM npc WHERE campania_id = ? AND estado != 'derrotado'")
+    .all(campaniaId) as Npc[];
+}
+
+export function pasarTurno(db: Database.Database, capituloId: string, personajeId: string): Capitulo {
+  db.prepare('UPDATE capitulo SET turno_actual = ? WHERE id = ?').run(personajeId, capituloId);
+  return obtenerCapitulo(db, capituloId);
+}
+
+// --- Items ---
+
+export interface Item {
+  id: string;
+  personaje_id: string;
+  nombre: string;
+  descripcion: string | null;
+  usos: number | null;
+}
+
+export function darItem(
+  db: Database.Database,
+  datos: { personajeId: string; nombre: string; descripcion?: string; usos?: number },
+): Item {
+  const item: Item = {
+    id: randomUUID(),
+    personaje_id: datos.personajeId,
+    nombre: datos.nombre,
+    descripcion: datos.descripcion ?? null,
+    usos: datos.usos ?? null,
+  };
+  db.prepare(
+    'INSERT INTO item (id, personaje_id, nombre, descripcion, usos) VALUES (@id, @personaje_id, @nombre, @descripcion, @usos)',
+  ).run(item);
+  return item;
+}
+
+export function obtenerItem(db: Database.Database, id: string): Item {
+  const fila = db.prepare('SELECT * FROM item WHERE id = ?').get(id) as Item | undefined;
+  if (!fila) throw new Error(`item no encontrado: ${id}`);
+  return fila;
+}
+
+/** Gasta un uso; si el item queda en 0 usos (o no tenía contador), se elimina. */
+export function gastarItem(db: Database.Database, itemId: string): { eliminado: boolean; usosRestantes: number | null } {
+  const item = obtenerItem(db, itemId);
+  if (item.usos === null) {
+    db.prepare('DELETE FROM item WHERE id = ?').run(itemId);
+    return { eliminado: true, usosRestantes: null };
+  }
+  const usosRestantes = item.usos - 1;
+  if (usosRestantes <= 0) {
+    db.prepare('DELETE FROM item WHERE id = ?').run(itemId);
+    return { eliminado: true, usosRestantes: 0 };
+  }
+  db.prepare('UPDATE item SET usos = ? WHERE id = ?').run(usosRestantes, itemId);
+  return { eliminado: false, usosRestantes };
+}
+
+export function itemsDePersonaje(db: Database.Database, personajeId: string): Item[] {
+  return db.prepare('SELECT * FROM item WHERE personaje_id = ?').all(personajeId) as Item[];
+}
+
+// --- Flags ---
+
+export function setFlag(db: Database.Database, campaniaId: string, clave: string, valor: string): void {
+  db.prepare(
+    `INSERT INTO flag (campania_id, clave, valor) VALUES (?, ?, ?)
+     ON CONFLICT (campania_id, clave) DO UPDATE SET valor = excluded.valor`,
+  ).run(campaniaId, clave, valor);
+}
+
+export function obtenerFlags(db: Database.Database, campaniaId: string): Record<string, string> {
+  const filas = db.prepare('SELECT clave, valor FROM flag WHERE campania_id = ?').all(campaniaId) as {
+    clave: string;
+    valor: string;
+  }[];
+  return Object.fromEntries(filas.map((f) => [f.clave, f.valor]));
+}
+
+// --- Hilos ---
+
+export interface Hilo {
+  id: string;
+  campania_id: string;
+  descripcion: string;
+  origen: 'jugador' | 'dm';
+  personaje_id: string | null;
+  estado: 'abierto' | 'usado' | 'cerrado';
+  creado_cap: number;
+}
+
+export function crearHilo(
+  db: Database.Database,
+  datos: { campaniaId: string; descripcion: string; origen: 'jugador' | 'dm'; personajeId?: string; creadoCap: number },
+): Hilo {
+  const hilo: Hilo = {
+    id: randomUUID(),
+    campania_id: datos.campaniaId,
+    descripcion: datos.descripcion,
+    origen: datos.origen,
+    personaje_id: datos.personajeId ?? null,
+    estado: 'abierto',
+    creado_cap: datos.creadoCap,
+  };
+  db.prepare(
+    `INSERT INTO hilo (id, campania_id, descripcion, origen, personaje_id, estado, creado_cap)
+     VALUES (@id, @campania_id, @descripcion, @origen, @personaje_id, @estado, @creado_cap)`,
+  ).run(hilo);
+  return hilo;
+}
+
+export function hilosAbiertosDeCapitulo(db: Database.Database, campaniaId: string, numeroCapitulo: number): Hilo[] {
+  return db
+    .prepare("SELECT * FROM hilo WHERE campania_id = ? AND creado_cap = ? AND estado = 'abierto'")
+    .all(campaniaId, numeroCapitulo) as Hilo[];
+}
+
+export function hilosDeCampania(db: Database.Database, campaniaId: string): Hilo[] {
+  return db.prepare('SELECT * FROM hilo WHERE campania_id = ?').all(campaniaId) as Hilo[];
+}
+
+export function cerrarHilo(db: Database.Database, hiloId: string): void {
+  db.prepare("UPDATE hilo SET estado = 'cerrado' WHERE id = ?").run(hiloId);
+}
+
+export function marcarHiloUsado(db: Database.Database, hiloId: string): void {
+  db.prepare("UPDATE hilo SET estado = 'usado' WHERE id = ?").run(hiloId);
+}
+
+// --- Turnos ---
+
+export interface Turno {
+  id: number;
+  capitulo_id: string;
+  autor: string;
+  texto: string;
+  proveedor: string | null;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  creado_en: number;
+}
+
+export function registrarTurno(
+  db: Database.Database,
+  datos: {
+    capituloId: string;
+    autor: string;
+    texto: string;
+    proveedor?: string;
+    tokensIn?: number;
+    tokensOut?: number;
+  },
+): Turno {
+  const info = db
+    .prepare(
+      `INSERT INTO turno (capitulo_id, autor, texto, proveedor, tokens_in, tokens_out, creado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      datos.capituloId,
+      datos.autor,
+      datos.texto,
+      datos.proveedor ?? null,
+      datos.tokensIn ?? null,
+      datos.tokensOut ?? null,
+      Date.now(),
+    );
+  return db.prepare('SELECT * FROM turno WHERE id = ?').get(info.lastInsertRowid) as Turno;
+}
+
+export function ultimosTurnos(db: Database.Database, capituloId: string, cantidad: number): Turno[] {
+  return (
+    db
+      .prepare('SELECT * FROM turno WHERE capitulo_id = ? ORDER BY id DESC LIMIT ?')
+      .all(capituloId, cantidad) as Turno[]
+  ).reverse();
+}
+
+// --- Cierre de capítulo ---
+
+export function cerrarCapituloDb(
+  db: Database.Database,
+  capituloId: string,
+  datos: { titulo?: string },
+): Capitulo {
+  db.prepare("UPDATE capitulo SET estado = 'cerrado', cerrado_en = ?, titulo = COALESCE(?, titulo) WHERE id = ?").run(
+    Date.now(),
+    datos.titulo ?? null,
+    capituloId,
+  );
+  return obtenerCapitulo(db, capituloId);
 }

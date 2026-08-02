@@ -4,3 +4,11 @@ node_modules/
 *.db-wal
 *.db-shm
 .env
+.env.local
+.next/
+tsconfig.tsbuildinfo
+data/
+
+# Binarios y modelos de voz: pesados (~750MB), se bajan con
+# scripts/setup-piper.ps1 y scripts/setup-whisper.ps1, no van al repo.
+tools/
