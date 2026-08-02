@@ -64,7 +64,9 @@ export function obtenerCampania(db: Database.Database, id: string): Campania {
 
 export function campaniaMasReciente(db: Database.Database): Campania | null {
   return (
-    (db.prepare('SELECT * FROM campania ORDER BY creada_en DESC LIMIT 1').get() as Campania | undefined) ?? null
+    (db.prepare('SELECT * FROM campania ORDER BY creada_en DESC, rowid DESC LIMIT 1').get() as
+      | Campania
+      | undefined) ?? null
   );
 }
 
@@ -186,6 +188,35 @@ export function incrementarCapitulosJugadosDeCampania(db: Database.Database, cam
     `UPDATE personaje SET capitulos_jugados = capitulos_jugados + 1
      WHERE id IN (SELECT personaje_id FROM campania_personaje WHERE campania_id = ?)`,
   ).run(campaniaId);
+}
+
+export function campaniasDePersonaje(db: Database.Database, personajeId: string): Campania[] {
+  return db
+    .prepare(
+      `SELECT c.* FROM campania c
+       JOIN campania_personaje cp ON cp.campania_id = c.id
+       WHERE cp.personaje_id = ?`,
+    )
+    .all(personajeId) as Campania[];
+}
+
+/**
+ * Borra un personaje del todo (no solo de una campaña). Irreversible.
+ * Rompe primero las referencias que otras filas puedan tener hacia él
+ * en CUALQUIER campaña donde haya jugado (capitulo.turno_actual,
+ * hilo.personaje_id), después borra su inventario y los vínculos, y
+ * por último la ficha.
+ */
+export function eliminarPersonaje(db: Database.Database, personajeId: string): void {
+  const transaccion = db.transaction(() => {
+    db.prepare('UPDATE capitulo SET turno_actual = NULL WHERE turno_actual = ?').run(personajeId);
+    db.prepare('UPDATE hilo SET personaje_id = NULL WHERE personaje_id = ?').run(personajeId);
+    db.prepare('DELETE FROM item WHERE personaje_id = ?').run(personajeId);
+    db.prepare('DELETE FROM campania_personaje WHERE personaje_id = ?').run(personajeId);
+    const resultado = db.prepare('DELETE FROM personaje WHERE id = ?').run(personajeId);
+    if (resultado.changes === 0) throw new Error(`personaje no encontrado: ${personajeId}`);
+  });
+  transaccion();
 }
 
 export function aplicarDanoPersonaje(
@@ -528,7 +559,7 @@ export interface CampaniaResumen {
 }
 
 export function listarCampanias(db: Database.Database): CampaniaResumen[] {
-  const campanias = db.prepare('SELECT * FROM campania ORDER BY creada_en DESC').all() as Campania[];
+  const campanias = db.prepare('SELECT * FROM campania ORDER BY creada_en DESC, rowid DESC').all() as Campania[];
 
   return campanias.map((c) => {
     const capitulo = capituloEnCursoDeCampania(db, c.id);

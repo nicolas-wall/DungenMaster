@@ -41,3 +41,36 @@ export function validarNombrePersonaje(nombre: string): string[] {
   }
   return [];
 }
+
+const CARA_A_ATRIBUTO: Record<number, keyof AtributosCreacion> = {
+  1: 'fuerza',
+  2: 'fuerza',
+  3: 'astucia',
+  4: 'astucia',
+  5: 'corazon',
+  6: 'corazon',
+};
+
+/**
+ * Reparto de atributos tirando un d6 físico 6 veces: se arranca en
+ * 8/8/8 (24 puntos) y cada tirada suma 1 punto al atributo de su cara
+ * (1-2 fuerza, 3-4 astucia, 5-6 corazón), hasta completar los 30. Como
+ * cada atributo puede recibir como máximo las 6 tiradas, el resultado
+ * siempre cae en el rango válido 8-14 sin necesidad de recortar nada.
+ */
+export function atributosPorDados(tiradas: readonly number[]): AtributosCreacion {
+  if (tiradas.length !== 6) {
+    throw new Error(`hacen falta exactamente 6 tiradas de d6, recibí ${tiradas.length}`);
+  }
+
+  const atributos: AtributosCreacion = { fuerza: MIN_CREACION, astucia: MIN_CREACION, corazon: MIN_CREACION };
+
+  for (const cara of tiradas) {
+    if (!Number.isInteger(cara) || cara < 1 || cara > 6) {
+      throw new Error(`tirada de d6 inválida: ${cara}`);
+    }
+    atributos[CARA_A_ATRIBUTO[cara]]++;
+  }
+
+  return atributos;
+}

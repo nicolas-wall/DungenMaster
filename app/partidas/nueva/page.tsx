@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { atributosPorDados } from '../../../src/motor/personaje.js';
 
 const ARQUETIPOS = [
   { id: 'explorador', nombre: 'Explorador', desc: 'Conoce los caminos y lee las huellas', items: ['Cuerda de 15 metros', 'Catalejo rayado', 'Mapa incompleto'] },
@@ -23,6 +24,15 @@ const ESCENAS_OPCIONES = [
   { valor: 12, nombre: 'Normal', desc: '2 sesiones' },
   { valor: 18, nombre: 'Largo', desc: '3 sesiones' },
 ];
+
+const CARA_A_ATRIBUTO: Record<number, 'fuerza' | 'astucia' | 'corazon'> = {
+  1: 'fuerza',
+  2: 'fuerza',
+  3: 'astucia',
+  4: 'astucia',
+  5: 'corazon',
+  6: 'corazon',
+};
 
 type Paso =
   | 'intro'
@@ -111,6 +121,8 @@ export default function NuevaPartida() {
   const [atributos, setAtributos] = useState({ fuerza: MIN_ATRIB, astucia: MIN_ATRIB, corazon: MIN_ATRIB });
   const [objetoElegido, setObjetoElegido] = useState<string | null>(null);
   const [debilidad, setDebilidad] = useState<string | null>(null);
+  const [modoAtributos, setModoAtributos] = useState<'elegir' | 'dados' | 'manual'>('elegir');
+  const [tiradasDados, setTiradasDados] = useState<number[]>([]);
 
   useEffect(() => {
     fetch('/api/personajes')
@@ -122,6 +134,10 @@ export default function NuevaPartida() {
   }, []);
 
   const puntosUsados = atributos.fuerza + atributos.astucia + atributos.corazon;
+  const previewDados = tiradasDados.reduce(
+    (acc, cara) => ({ ...acc, [CARA_A_ATRIBUTO[cara]]: acc[CARA_A_ATRIBUTO[cara]] + 1 }),
+    { fuerza: MIN_ATRIB, astucia: MIN_ATRIB, corazon: MIN_ATRIB },
+  );
   const puntosRestantes = PUNTOS_TOTALES - puntosUsados;
   const arquetipoElegido = ARQUETIPOS.find((a) => a.id === arquetipo);
   const jugadorDisponible: 'papa' | 'hijo' = personajesCreados.some((p) => p.jugador === 'hijo') ? 'papa' : 'hijo';
@@ -137,6 +153,8 @@ export default function NuevaPartida() {
     setObjetoElegido(null);
     setDebilidad(null);
     setPersonajeExistenteElegido(null);
+    setModoAtributos('elegir');
+    setTiradasDados([]);
   }
 
   function agregarPersonaje(nuevo: PersonajeParaCrear) {
@@ -153,6 +171,14 @@ export default function NuevaPartida() {
       if (delta > 0 && puntosRestantes <= 0) return prev;
       return { ...prev, [clave]: nuevo };
     });
+  }
+
+  function tirarDado(cara: number) {
+    const nuevasTiradas = [...tiradasDados, cara];
+    setTiradasDados(nuevasTiradas);
+    if (nuevasTiradas.length === 6) {
+      setAtributos(atributosPorDados(nuevasTiradas));
+    }
   }
 
   function confirmarPersonajeNuevo() {
@@ -396,7 +422,91 @@ export default function NuevaPartida() {
           </>
         )}
 
-        {paso === 'atributos' && (
+        {paso === 'atributos' && modoAtributos === 'elegir' && (
+          <>
+            <h2>¿Cómo repartimos los 30 puntos?</h2>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <BotonPaso onClick={() => setModoAtributos('dados')}>🎲 Tirar los dados</BotonPaso>
+              <button
+                onClick={() => setModoAtributos('manual')}
+                style={{ background: 'transparent', border: '1px solid #444', color: '#aaa', borderRadius: 8, padding: '10px 20px' }}
+              >
+                ✋ Elegir a mano
+              </button>
+            </div>
+          </>
+        )}
+
+        {paso === 'atributos' && modoAtributos === 'dados' && tiradasDados.length < 6 && (
+          <>
+            <h2>Tirada {tiradasDados.length + 1} de 6</h2>
+            <p style={{ opacity: 0.7, textAlign: 'center' }}>
+              Tirá el dado de 6 caras y tocá el número que salió.
+              <br />
+              1-2 suma Fuerza · 3-4 suma Astucia · 5-6 suma Corazón
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[1, 2, 3, 4, 5, 6].map((cara) => (
+                <button
+                  key={cara}
+                  onClick={() => tirarDado(cara)}
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 10,
+                    border: '1px solid #333',
+                    background: '#181818',
+                    color: '#eee',
+                    fontSize: 20,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {cara}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 24, marginTop: 8 }}>
+              {(['fuerza', 'astucia', 'corazon'] as const).map((clave) => (
+                <div key={clave} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, opacity: 0.5, letterSpacing: 1 }}>{clave.toUpperCase()}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>{previewDados[clave]}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {paso === 'atributos' && modoAtributos === 'dados' && tiradasDados.length === 6 && (
+          <>
+            <h2>¡Listo! Así quedaron</h2>
+            <div style={{ display: 'flex', gap: 24 }}>
+              {(['fuerza', 'astucia', 'corazon'] as const).map((clave) => (
+                <div key={clave} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, opacity: 0.6, letterSpacing: 1, marginBottom: 4 }}>{clave.toUpperCase()}</div>
+                  <div style={{ fontSize: 32, fontWeight: 700 }}>{atributos[clave]}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <BotonPaso onClick={() => setPaso('objeto')}>Siguiente</BotonPaso>
+              <button
+                onClick={() => setTiradasDados([])}
+                style={{ background: 'transparent', border: '1px solid #444', color: '#aaa', borderRadius: 8, padding: '10px 20px' }}
+              >
+                🔄 Tirar de nuevo
+              </button>
+              <button
+                onClick={() => setModoAtributos('manual')}
+                style={{ background: 'transparent', border: '1px solid #444', color: '#aaa', borderRadius: 8, padding: '10px 20px' }}
+              >
+                ✋ Ajustar a mano
+              </button>
+            </div>
+          </>
+        )}
+
+        {paso === 'atributos' && modoAtributos === 'manual' && (
           <>
             <h2>Repartí 30 puntos</h2>
             <p style={{ opacity: 0.7 }}>Cada atributo entre 8 y 14. Te quedan: {puntosRestantes}</p>

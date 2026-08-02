@@ -48,19 +48,24 @@ export default function Lobby() {
     <main style={{ minHeight: '100vh', padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
       <h1 style={{ marginBottom: 0 }}>Partidas</h1>
 
-      <Link
-        href="/partidas/nueva"
-        style={{
-          background: '#2ecc71',
-          color: '#111',
-          fontWeight: 700,
-          padding: '12px 28px',
-          borderRadius: 8,
-          textDecoration: 'none',
-        }}
-      >
-        + Nueva partida
-      </Link>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <Link
+          href="/partidas/nueva"
+          style={{
+            background: '#2ecc71',
+            color: '#111',
+            fontWeight: 700,
+            padding: '12px 28px',
+            borderRadius: 8,
+            textDecoration: 'none',
+          }}
+        >
+          + Nueva partida
+        </Link>
+        <Link href="/personajes" style={{ color: '#8ab4f8', fontSize: 14 }}>
+          Ver personajes
+        </Link>
+      </div>
 
       {error ? <div style={{ color: '#e74c3c' }}>{error}</div> : null}
 
