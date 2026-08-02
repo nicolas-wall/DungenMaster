@@ -537,3 +537,34 @@ export function detalleCampania(db: Database.Database, campaniaId: string): Camp
 
   return { campania, capitulo, personajes };
 }
+
+/**
+ * Borra una campaña y todo lo que cuelga de ella. Irreversible. El orden
+ * importa: hay foreign keys activas (PRAGMA foreign_keys = ON), así que
+ * los hijos se borran antes que los padres, y primero se rompe la
+ * referencia circular capitulo.hilo_semilla_id -> hilo.
+ */
+export function eliminarCampania(db: Database.Database, campaniaId: string): void {
+  const transaccion = db.transaction(() => {
+    db.prepare('UPDATE capitulo SET hilo_semilla_id = NULL, turno_actual = NULL WHERE campania_id = ?').run(
+      campaniaId,
+    );
+    db.prepare(
+      'DELETE FROM turno WHERE capitulo_id IN (SELECT id FROM capitulo WHERE campania_id = ?)',
+    ).run(campaniaId);
+    db.prepare(
+      'DELETE FROM sesion WHERE capitulo_id IN (SELECT id FROM capitulo WHERE campania_id = ?)',
+    ).run(campaniaId);
+    db.prepare(
+      'DELETE FROM item WHERE personaje_id IN (SELECT id FROM personaje WHERE campania_id = ?)',
+    ).run(campaniaId);
+    db.prepare('DELETE FROM hilo WHERE campania_id = ?').run(campaniaId);
+    db.prepare('DELETE FROM npc WHERE campania_id = ?').run(campaniaId);
+    db.prepare('DELETE FROM personaje WHERE campania_id = ?').run(campaniaId);
+    db.prepare('DELETE FROM flag WHERE campania_id = ?').run(campaniaId);
+    db.prepare('DELETE FROM capitulo WHERE campania_id = ?').run(campaniaId);
+    const resultado = db.prepare('DELETE FROM campania WHERE id = ?').run(campaniaId);
+    if (resultado.changes === 0) throw new Error(`campaña no encontrada: ${campaniaId}`);
+  });
+  transaccion();
+}
