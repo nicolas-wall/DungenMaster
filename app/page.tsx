@@ -49,6 +49,14 @@ export default function PaginaDM() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const sesionIniciadaRef = useRef(false);
+  const transcripcionRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (transcripcionRef.current) {
+      transcripcionRef.current.scrollTop = transcripcionRef.current.scrollHeight;
+    }
+  }, [log]);
 
   async function refrescarEstado() {
     try {
@@ -58,13 +66,37 @@ export default function PaginaDM() {
       if (!autorId && datos.personajes?.length) {
         setAutorId(datos.capitulo?.turno_actual ?? datos.personajes[0].id);
       }
+      return datos;
     } catch {
       // el poll de estado no es crítico, se reintenta solo
+      return null;
+    }
+  }
+
+  async function iniciarSesion() {
+    if (sesionIniciadaRef.current) return;
+    sesionIniciadaRef.current = true;
+    try {
+      const r = await fetch('/api/sesion', { method: 'POST' });
+      const datos = await r.json();
+      if (!r.ok) {
+        setError(datos.error ?? 'no se pudo iniciar la sesión');
+        return;
+      }
+      if (datos.narracion) {
+        setLog((prev) => [...prev, { quien: 'dm', texto: datos.narracion }]);
+        if (datos.audio?.length) await reproducirCola(datos.audio);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   }
 
   useEffect(() => {
-    refrescarEstado();
+    (async () => {
+      const datos = await refrescarEstado();
+      if (datos?.lista) await iniciarSesion();
+    })();
     const id = setInterval(refrescarEstado, 4000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,16 +265,29 @@ export default function PaginaDM() {
         {error ? <div style={{ color: '#e74c3c' }}>{error}</div> : null}
       </section>
 
-      <section style={{ width: '100%', maxWidth: 640, fontSize: 14, opacity: 0.85 }}>
-        <div style={{ opacity: 0.5, marginBottom: 8 }}>— transcripción de prueba (no se muestra en juego real) —</div>
-        {log
-          .slice()
-          .reverse()
-          .map((entrada, i) => (
-            <div key={i} style={{ marginBottom: 8 }}>
-              <strong>{entrada.quien === 'dm' ? 'DM' : 'Jugador'}:</strong> {entrada.texto}
-            </div>
-          ))}
+      <section style={{ width: '100%', maxWidth: 640 }}>
+        <div style={{ opacity: 0.5, marginBottom: 8, fontSize: 13, letterSpacing: 1 }}>TRANSCRIPCIÓN</div>
+        <div
+          ref={transcripcionRef}
+          style={{
+            maxHeight: 260,
+            overflowY: 'auto',
+            border: '1px solid #333',
+            borderRadius: 8,
+            padding: 12,
+            fontSize: 14,
+          }}
+        >
+          {log.length === 0 ? (
+            <div style={{ opacity: 0.4 }}>Todavía no pasó nada.</div>
+          ) : (
+            log.map((entrada, i) => (
+              <div key={i} style={{ marginBottom: 8 }}>
+                <strong>{entrada.quien === 'dm' ? 'DM' : 'Jugador'}:</strong> {entrada.texto}
+              </div>
+            ))
+          )}
+        </div>
       </section>
     </main>
   );

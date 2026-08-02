@@ -52,6 +52,12 @@ CONTINUIDAD
   registrar_hilo().
 - Diálogo de NPC: [voz:ID] texto [/voz].
 
+INICIO DE SESIÓN
+- Cuando te pidan explícitamente el recap de inicio de sesión, tu respuesta
+  es SOLO eso: un resumen de máximo 60 palabras que empieza con "La última
+  vez..." y termina preguntando qué hace el jugador de turno. No llames a
+  ninguna tool en ese mensaje.
+
 CONTENIDO
 - Sin muerte de personajes jugadores. Sin sangre. Sin crueldad hacia animales
   o niños.
@@ -231,4 +237,42 @@ export async function correrTurno(
   }
 
   throw new Error(`el modelo no cerró el turno después de ${MAX_ITERACIONES_TOOLS} llamadas a tools`);
+}
+
+export interface ResultadoRecap {
+  narracion: string;
+  proveedor: string;
+  tokensIn: number;
+  tokensOut: number;
+}
+
+/**
+ * Recap de inicio de sesión (CLAUDE.md sección 10): "La última vez...",
+ * máximo 60 palabras. Sin tools — es puro resumen, no debería tocar
+ * estado. Se llama una vez al abrir una sesión nueva sobre un capítulo
+ * que ya tiene turnos jugados.
+ */
+export async function generarRecap(provider: LLMProvider, ctx: ContextoTurno): Promise<ResultadoRecap> {
+  const { db, campaniaId, capituloId } = ctx;
+
+  const mensajes = construirContexto(db, campaniaId, capituloId);
+  mensajes.push({
+    role: 'user',
+    content:
+      '(Esto no lo dijo ningún jugador: es el sistema que abre una sesión nueva. Generá el recap de inicio de sesión como indica tu system prompt — arrancá con "La última vez...", máximo 60 palabras, terminá preguntando qué hace el jugador de turno. No llames a ninguna tool.)',
+  });
+
+  const { mensaje, tokensIn, tokensOut } = await provider.completar({ mensajes });
+  const narracion = mensaje.content ?? '';
+
+  repo.registrarTurno(db, {
+    capituloId,
+    autor: 'dm',
+    texto: narracion,
+    proveedor: provider.nombre,
+    tokensIn: tokensIn ?? 0,
+    tokensOut: tokensOut ?? 0,
+  });
+
+  return { narracion, proveedor: provider.nombre, tokensIn: tokensIn ?? 0, tokensOut: tokensOut ?? 0 };
 }

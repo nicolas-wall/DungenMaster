@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type Database from 'better-sqlite3';
 import { abrirDb } from '../db/client.js';
 import * as repo from '../db/repo.js';
-import { correrTurno } from './loop.js';
+import { correrTurno, generarRecap } from './loop.js';
 import type { LLMProvider, Mensaje, ResultadoCompletar, ToolSchema } from './provider.js';
 
 /**
@@ -15,12 +15,14 @@ class LLMFalso implements LLMProvider {
   readonly nombre = 'falso';
   private respuestas: Mensaje[];
   private indice = 0;
+  llamadas: { mensajes: Mensaje[]; tools?: ToolSchema[] }[] = [];
 
   constructor(respuestas: Mensaje[]) {
     this.respuestas = respuestas;
   }
 
-  async completar(_args: { mensajes: Mensaje[]; tools?: ToolSchema[] }): Promise<ResultadoCompletar> {
+  async completar(args: { mensajes: Mensaje[]; tools?: ToolSchema[] }): Promise<ResultadoCompletar> {
+    this.llamadas.push(args);
     const mensaje = this.respuestas[this.indice];
     if (!mensaje) throw new Error('el LLMFalso se quedó sin respuestas preparadas');
     this.indice++;
@@ -149,5 +151,34 @@ describe('correrTurno', () => {
     const toolHilo = resultado.toolsEjecutadas[0];
     expect(toolHilo.resultado).toHaveProperty('error');
     expect(repo.hilosDeCampania(db, campaniaId)).toHaveLength(0);
+  });
+});
+
+describe('generarRecap', () => {
+  let db: Database.Database;
+  let campaniaId: string;
+  let capituloId: string;
+
+  beforeEach(() => {
+    db = abrirDb(':memory:');
+    const campania = repo.crearCampania(db, 'Test');
+    campaniaId = campania.id;
+    const capitulo = repo.crearCapitulo(db, { campaniaId, numero: 1, escenasTotal: 8 });
+    capituloId = capitulo.id;
+  });
+
+  it('llama al modelo sin tools y registra el resultado como turno del dm', async () => {
+    const provider = new LLMFalso([{ role: 'assistant', content: 'La última vez, Bruno encontró una llave dorada. ¿Qué hace ahora?' }]);
+
+    const resultado = await generarRecap(provider, { db, campaniaId, capituloId });
+
+    expect(resultado.narracion).toContain('La última vez');
+    expect(provider.llamadas).toHaveLength(1);
+    expect(provider.llamadas[0].tools).toBeUndefined();
+
+    const turnos = repo.ultimosTurnos(db, capituloId, 10);
+    expect(turnos).toHaveLength(1);
+    expect(turnos[0].autor).toBe('dm');
+    expect(turnos[0].texto).toContain('La última vez');
   });
 });

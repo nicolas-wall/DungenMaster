@@ -1,5 +1,7 @@
-const VOZ_NARRADOR_DEFAULT = 'es_AR-daniela-high';
-const VOCES_NPC_DEFAULT = ['es_ES-davefx-medium', 'es_MX-claude-high'];
+// Medido por F0 (pitch) sobre las 3 voces descargadas: davefx ronda 134Hz
+// (rango masculino), daniela y claude-high rondan 176-179Hz (femenino).
+const VOZ_NARRADOR_DEFAULT = 'es_ES-davefx-medium';
+const VOCES_NPC_DEFAULT = ['es_AR-daniela-high', 'es_MX-claude-high'];
 
 export function vozNarrador(): string {
   return process.env.VOZ_NARRADOR ?? VOZ_NARRADOR_DEFAULT;

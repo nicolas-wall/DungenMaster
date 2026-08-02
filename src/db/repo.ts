@@ -432,3 +432,52 @@ export function cerrarCapituloDb(
   );
   return obtenerCapitulo(db, capituloId);
 }
+
+// --- Sesiones ---
+// sesion = pausa física (cerrar la compu y volver otro día), sin
+// significado narrativo. Sirve para saber cuándo generar el recap
+// de "la última vez...".
+
+export interface Sesion {
+  id: string;
+  capitulo_id: string;
+  inicio: number;
+  fin: number | null;
+  escena_inicio: number;
+  escena_fin: number | null;
+}
+
+export function sesionAbierta(db: Database.Database, capituloId: string): Sesion | null {
+  return (
+    (db
+      .prepare('SELECT * FROM sesion WHERE capitulo_id = ? AND fin IS NULL ORDER BY inicio DESC LIMIT 1')
+      .get(capituloId) as Sesion | undefined) ?? null
+  );
+}
+
+export function abrirSesion(db: Database.Database, capituloId: string): Sesion {
+  const capitulo = obtenerCapitulo(db, capituloId);
+  const sesion: Sesion = {
+    id: randomUUID(),
+    capitulo_id: capituloId,
+    inicio: Date.now(),
+    fin: null,
+    escena_inicio: capitulo.escena_actual,
+    escena_fin: null,
+  };
+  db.prepare(
+    'INSERT INTO sesion (id, capitulo_id, inicio, fin, escena_inicio, escena_fin) VALUES (@id, @capitulo_id, @inicio, @fin, @escena_inicio, @escena_fin)',
+  ).run(sesion);
+  return sesion;
+}
+
+export function cerrarSesion(db: Database.Database, sesionId: string): void {
+  const capitulo = db
+    .prepare('SELECT c.* FROM capitulo c JOIN sesion s ON s.capitulo_id = c.id WHERE s.id = ?')
+    .get(sesionId) as Capitulo;
+  db.prepare('UPDATE sesion SET fin = ?, escena_fin = ? WHERE id = ?').run(
+    Date.now(),
+    capitulo.escena_actual,
+    sesionId,
+  );
+}
