@@ -12,9 +12,11 @@ import {
   eliminarCampania,
   listarCampanias,
   obtenerCampania,
+  obtenerPersonaje,
   pasarTurno,
   registrarTurno,
   setFlag,
+  vincularPersonajeACampania,
 } from './repo.js';
 
 describe('listarCampanias', () => {
@@ -27,8 +29,7 @@ describe('listarCampanias', () => {
   it('devuelve las campañas más nuevas primero, con capítulo y personajes', () => {
     const c1 = crearCampania(db, 'Primera');
     crearCapitulo(db, { campaniaId: c1.id, numero: 1, escenasTotal: 8 });
-    crearPersonaje(db, {
-      campaniaId: c1.id,
+    const bruno = crearPersonaje(db, {
       jugador: 'hijo',
       nombre: 'Bruno',
       arquetipo: 'guardian',
@@ -36,6 +37,7 @@ describe('listarCampanias', () => {
       astucia: 10,
       corazon: 8,
     });
+    vincularPersonajeACampania(db, c1.id, bruno.id);
 
     const c2 = crearCampania(db, 'Segunda');
     crearCapitulo(db, { campaniaId: c2.id, numero: 1, escenasTotal: 12 });
@@ -67,7 +69,6 @@ describe('detalleCampania', () => {
     const campania = crearCampania(db, 'Test');
     crearCapitulo(db, { campaniaId: campania.id, numero: 1, escenasTotal: 8 });
     const bruno = crearPersonaje(db, {
-      campaniaId: campania.id,
       jugador: 'hijo',
       nombre: 'Bruno',
       arquetipo: 'guardian',
@@ -76,6 +77,7 @@ describe('detalleCampania', () => {
       corazon: 8,
       debilidad: 'Le tiene miedo a la oscuridad',
     });
+    vincularPersonajeACampania(db, campania.id, bruno.id);
     darItem(db, { personajeId: bruno.id, nombre: 'Escudo de madera pintado' });
 
     const detalle = detalleCampania(db, campania.id);
@@ -94,11 +96,10 @@ describe('eliminarCampania', () => {
     db = abrirDb(':memory:');
   });
 
-  it('borra la campaña y todo lo que cuelga de ella, incluida la referencia circular con hilo_semilla_id', () => {
+  it('borra lo específico de la campaña pero conserva los personajes (son reutilizables)', () => {
     const campania = crearCampania(db, 'A borrar');
     const capitulo = crearCapitulo(db, { campaniaId: campania.id, numero: 1, escenasTotal: 8 });
     const bruno = crearPersonaje(db, {
-      campaniaId: campania.id,
       jugador: 'hijo',
       nombre: 'Bruno',
       arquetipo: 'guardian',
@@ -106,6 +107,7 @@ describe('eliminarCampania', () => {
       astucia: 10,
       corazon: 8,
     });
+    vincularPersonajeACampania(db, campania.id, bruno.id);
     darItem(db, { personajeId: bruno.id, nombre: 'Escudo' });
     crearNpc(db, { campaniaId: campania.id, nombre: 'Duende' });
     const hilo = crearHilo(db, { campaniaId: campania.id, descripcion: 'Un hilo', origen: 'jugador', creadoCap: 1 });
@@ -117,13 +119,18 @@ describe('eliminarCampania', () => {
     eliminarCampania(db, campania.id);
 
     expect(() => obtenerCampania(db, campania.id)).toThrow();
-    expect(db.prepare('SELECT COUNT(*) as n FROM personaje WHERE campania_id = ?').get(campania.id)).toEqual({ n: 0 });
+    // lo específico de la campaña desaparece
     expect(db.prepare('SELECT COUNT(*) as n FROM npc WHERE campania_id = ?').get(campania.id)).toEqual({ n: 0 });
     expect(db.prepare('SELECT COUNT(*) as n FROM hilo WHERE campania_id = ?').get(campania.id)).toEqual({ n: 0 });
     expect(db.prepare('SELECT COUNT(*) as n FROM flag WHERE campania_id = ?').get(campania.id)).toEqual({ n: 0 });
-    expect(db.prepare('SELECT COUNT(*) as n FROM item WHERE personaje_id = ?').get(bruno.id)).toEqual({ n: 0 });
     expect(db.prepare('SELECT COUNT(*) as n FROM turno WHERE capitulo_id = ?').get(capitulo.id)).toEqual({ n: 0 });
     expect(db.prepare('SELECT COUNT(*) as n FROM capitulo WHERE campania_id = ?').get(campania.id)).toEqual({ n: 0 });
+    expect(
+      db.prepare('SELECT COUNT(*) as n FROM campania_personaje WHERE campania_id = ?').get(campania.id),
+    ).toEqual({ n: 0 });
+    // el personaje y su inventario sobreviven, son reutilizables
+    expect(obtenerPersonaje(db, bruno.id).nombre).toBe('Bruno');
+    expect(db.prepare('SELECT COUNT(*) as n FROM item WHERE personaje_id = ?').get(bruno.id)).toEqual({ n: 1 });
   });
 
   it('no toca otras campañas', () => {

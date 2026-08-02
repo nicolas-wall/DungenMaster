@@ -26,7 +26,6 @@ describe('simulación de un combate completo', () => {
     const capitulo = crearCapitulo(db, { campaniaId: campania.id, numero: 1, escenasTotal: 8 });
 
     const bruno = crearPersonaje(db, {
-      campaniaId: campania.id,
       jugador: 'hijo',
       nombre: 'Bruno',
       arquetipo: 'guardian',
@@ -35,7 +34,6 @@ describe('simulación de un combate completo', () => {
       corazon: 8,
     });
     const papa = crearPersonaje(db, {
-      campaniaId: campania.id,
       jugador: 'papa',
       nombre: 'Elián',
       arquetipo: 'explorador',
@@ -86,9 +84,7 @@ describe('simulación de un combate completo', () => {
   });
 
   it('rechaza daño negativo y no corrompe el HP existente', () => {
-    const campania = crearCampania(db, 'Campaña de prueba');
     const personaje = crearPersonaje(db, {
-      campaniaId: campania.id,
       jugador: 'hijo',
       nombre: 'Nina',
       arquetipo: 'curioso',

@@ -6,6 +6,7 @@ import { esArquetipoValido, esDebilidadValida, esItemDeArquetipoValido } from '.
 export const runtime = 'nodejs';
 
 interface CuerpoPersonaje {
+  personajeId?: string;
   jugador?: 'papa' | 'hijo';
   nombre?: string;
   arquetipo?: string;
@@ -14,6 +15,16 @@ interface CuerpoPersonaje {
   corazon?: number;
   objetoElegido?: string;
   debilidad?: string;
+}
+
+function fijarTurnoInicial(database: ReturnType<typeof db>, campaniaId: string, personaje: repo.Personaje) {
+  // El hijo arranca el turno por convención (ver scripts/seed.ts) — se fija
+  // acá para que la pantalla nunca quede sin "TURNO" mientras el modelo
+  // no llamó a pasar_turno todavía.
+  if (personaje.jugador === 'hijo') {
+    const capitulo = repo.capituloEnCursoDeCampania(database, campaniaId);
+    if (capitulo) repo.pasarTurno(database, capitulo.id, personaje.id);
+  }
 }
 
 export async function POST(
@@ -31,6 +42,33 @@ export async function POST(
   }
 
   const cuerpo = (await request.json()) as CuerpoPersonaje;
+
+  // --- Modo "usar un personaje ya creado" ---
+  if (cuerpo.personajeId) {
+    let personaje;
+    try {
+      personaje = repo.obtenerPersonaje(database, cuerpo.personajeId);
+    } catch {
+      return Response.json({ error: `personaje no encontrado: ${cuerpo.personajeId}` }, { status: 404 });
+    }
+
+    if (repo.personajesDeCampania(database, campaniaId).some((p) => p.jugador === personaje.jugador)) {
+      return Response.json({ error: `ya existe un personaje para "${personaje.jugador}" en esta campaña` }, { status: 400 });
+    }
+
+    try {
+      repo.vincularPersonajeACampania(database, campaniaId, personaje.id);
+    } catch {
+      return Response.json({ error: 'ese personaje ya está en esta campaña' }, { status: 400 });
+    }
+
+    const personajeCurado = repo.curarCompletamente(database, personaje.id);
+    fijarTurnoInicial(database, campania.id, personajeCurado);
+
+    return Response.json({ personaje: personajeCurado }, { status: 201 });
+  }
+
+  // --- Modo "crear un personaje nuevo" ---
   const errores: string[] = [];
 
   if (cuerpo.jugador !== 'papa' && cuerpo.jugador !== 'hijo') {
@@ -78,7 +116,6 @@ export async function POST(
   }
 
   const personaje = repo.crearPersonaje(database, {
-    campaniaId: campania.id,
     jugador: cuerpo.jugador!,
     nombre: cuerpo.nombre!.trim(),
     arquetipo: cuerpo.arquetipo!,
@@ -88,14 +125,8 @@ export async function POST(
     debilidad: cuerpo.debilidad,
   });
   repo.darItem(database, { personajeId: personaje.id, nombre: cuerpo.objetoElegido! });
-
-  // El hijo arranca el turno por convención (ver scripts/seed.ts) — se fija
-  // acá para que la pantalla nunca quede sin "TURNO" mientras el modelo
-  // no llamó a pasar_turno todavía.
-  if (personaje.jugador === 'hijo') {
-    const capitulo = repo.capituloEnCursoDeCampania(database, campania.id);
-    if (capitulo) repo.pasarTurno(database, capitulo.id, personaje.id);
-  }
+  repo.vincularPersonajeACampania(database, campania.id, personaje.id);
+  fijarTurnoInicial(database, campania.id, personaje);
 
   return Response.json({ personaje }, { status: 201 });
 }

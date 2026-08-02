@@ -55,7 +55,6 @@ describe('correrTurno', () => {
     const capitulo = repo.crearCapitulo(db, { campaniaId, numero: 1, escenasTotal: 8 });
     capituloId = capitulo.id;
     const bruno = repo.crearPersonaje(db, {
-      campaniaId,
       jugador: 'hijo',
       nombre: 'Bruno',
       arquetipo: 'guardian',
@@ -63,6 +62,7 @@ describe('correrTurno', () => {
       astucia: 10,
       corazon: 8,
     });
+    repo.vincularPersonajeACampania(db, campaniaId, bruno.id);
     brunoId = bruno.id;
   });
 
@@ -151,6 +151,19 @@ describe('correrTurno', () => {
     const toolHilo = resultado.toolsEjecutadas[0];
     expect(toolHilo.resultado).toHaveProperty('error');
     expect(repo.hilosDeCampania(db, campaniaId)).toHaveLength(0);
+  });
+
+  it('cerrar_capitulo suma un capítulo jugado a cada personaje de la campaña', async () => {
+    repo.moverEscena(db, capituloId, 8); // 8/8 = fase 'cierre'
+    expect(repo.obtenerPersonaje(db, brunoId).capitulos_jugados).toBe(0);
+
+    const provider = new LLMFalso([
+      toolCallMsg('cerrar_capitulo', { titulo: 'El fin', que_cambio_en_el_mundo: 'Todo tranquilo' }),
+      { role: 'assistant', content: 'Fin del capítulo.' },
+    ]);
+    await correrTurno(provider, { db, campaniaId, capituloId }, 'Cerramos acá', brunoId);
+
+    expect(repo.obtenerPersonaje(db, brunoId).capitulos_jugados).toBe(1);
   });
 });
 

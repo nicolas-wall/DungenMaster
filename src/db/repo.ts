@@ -26,7 +26,6 @@ export interface Capitulo {
 
 export interface Personaje {
   id: string;
-  campania_id: string;
   jugador: 'papa' | 'hijo';
   nombre: string;
   arquetipo: string;
@@ -115,10 +114,14 @@ export function moverEscena(db: Database.Database, capituloId: string, nuevaEsce
   return obtenerCapitulo(db, capituloId);
 }
 
+/**
+ * Crea un personaje nuevo. Es una identidad independiente de cualquier
+ * campaña — para que juegue una partida hay que vincularlo con
+ * vincularPersonajeACampania().
+ */
 export function crearPersonaje(
   db: Database.Database,
   datos: {
-    campaniaId: string;
     jugador: 'papa' | 'hijo';
     nombre: string;
     arquetipo: string;
@@ -132,7 +135,6 @@ export function crearPersonaje(
   const hpMax = datos.hpMax ?? 6;
   const personaje: Personaje = {
     id: randomUUID(),
-    campania_id: datos.campaniaId,
     jugador: datos.jugador,
     nombre: datos.nombre,
     arquetipo: datos.arquetipo,
@@ -146,9 +148,9 @@ export function crearPersonaje(
   };
   db.prepare(
     `INSERT INTO personaje
-      (id, campania_id, jugador, nombre, arquetipo, fuerza, astucia, corazon, hp, hp_max, debilidad, capitulos_jugados)
+      (id, jugador, nombre, arquetipo, fuerza, astucia, corazon, hp, hp_max, debilidad, capitulos_jugados)
      VALUES
-      (@id, @campania_id, @jugador, @nombre, @arquetipo, @fuerza, @astucia, @corazon, @hp, @hp_max, @debilidad, @capitulos_jugados)`,
+      (@id, @jugador, @nombre, @arquetipo, @fuerza, @astucia, @corazon, @hp, @hp_max, @debilidad, @capitulos_jugados)`,
   ).run(personaje);
   return personaje;
 }
@@ -157,6 +159,33 @@ export function obtenerPersonaje(db: Database.Database, id: string): Personaje {
   const fila = db.prepare('SELECT * FROM personaje WHERE id = ?').get(id) as Personaje | undefined;
   if (!fila) throw new Error(`personaje no encontrado: ${id}`);
   return fila;
+}
+
+export function listarPersonajesGlobales(db: Database.Database): Personaje[] {
+  return db.prepare('SELECT * FROM personaje ORDER BY nombre').all() as Personaje[];
+}
+
+/** Vincula un personaje existente a una campaña. Error si ya está vinculado a esa campaña. */
+export function vincularPersonajeACampania(db: Database.Database, campaniaId: string, personajeId: string): void {
+  db.prepare('INSERT INTO campania_personaje (campania_id, personaje_id) VALUES (?, ?)').run(
+    campaniaId,
+    personajeId,
+  );
+}
+
+/** Cura al personaje a su HP máximo — se usa al empezar una partida nueva con un personaje ya existente. */
+export function curarCompletamente(db: Database.Database, personajeId: string): Personaje {
+  const personaje = obtenerPersonaje(db, personajeId);
+  db.prepare('UPDATE personaje SET hp = ? WHERE id = ?').run(personaje.hp_max, personajeId);
+  return obtenerPersonaje(db, personajeId);
+}
+
+/** Se llama al cerrar un capítulo: cada personaje de la campaña suma una entrada a su historial. */
+export function incrementarCapitulosJugadosDeCampania(db: Database.Database, campaniaId: string): void {
+  db.prepare(
+    `UPDATE personaje SET capitulos_jugados = capitulos_jugados + 1
+     WHERE id IN (SELECT personaje_id FROM campania_personaje WHERE campania_id = ?)`,
+  ).run(campaniaId);
 }
 
 export function aplicarDanoPersonaje(
@@ -235,7 +264,13 @@ export function actualizarNpc(
 }
 
 export function personajesDeCampania(db: Database.Database, campaniaId: string): Personaje[] {
-  return db.prepare('SELECT * FROM personaje WHERE campania_id = ?').all(campaniaId) as Personaje[];
+  return db
+    .prepare(
+      `SELECT p.* FROM personaje p
+       JOIN campania_personaje cp ON cp.personaje_id = p.id
+       WHERE cp.campania_id = ?`,
+    )
+    .all(campaniaId) as Personaje[];
 }
 
 export function npcsVivosDeCampania(db: Database.Database, campaniaId: string): Npc[] {
@@ -539,10 +574,13 @@ export function detalleCampania(db: Database.Database, campaniaId: string): Camp
 }
 
 /**
- * Borra una campaña y todo lo que cuelga de ella. Irreversible. El orden
- * importa: hay foreign keys activas (PRAGMA foreign_keys = ON), así que
- * los hijos se borran antes que los padres, y primero se rompe la
- * referencia circular capitulo.hilo_semilla_id -> hilo.
+ * Borra una campaña y lo que es específico de ella (capítulos, turnos,
+ * sesiones, npcs, hilos, flags). Los personajes NO se borran — son
+ * reutilizables entre campañas, solo se desvinculan. Irreversible.
+ * El orden importa: hay foreign keys activas (PRAGMA foreign_keys = ON),
+ * así que los hijos se borran antes que los padres, y primero se rompe
+ * la referencia circular capitulo.hilo_semilla_id -> hilo y
+ * capitulo.turno_actual -> personaje.
  */
 export function eliminarCampania(db: Database.Database, campaniaId: string): void {
   const transaccion = db.transaction(() => {
@@ -555,12 +593,9 @@ export function eliminarCampania(db: Database.Database, campaniaId: string): voi
     db.prepare(
       'DELETE FROM sesion WHERE capitulo_id IN (SELECT id FROM capitulo WHERE campania_id = ?)',
     ).run(campaniaId);
-    db.prepare(
-      'DELETE FROM item WHERE personaje_id IN (SELECT id FROM personaje WHERE campania_id = ?)',
-    ).run(campaniaId);
+    db.prepare('DELETE FROM campania_personaje WHERE campania_id = ?').run(campaniaId);
     db.prepare('DELETE FROM hilo WHERE campania_id = ?').run(campaniaId);
     db.prepare('DELETE FROM npc WHERE campania_id = ?').run(campaniaId);
-    db.prepare('DELETE FROM personaje WHERE campania_id = ?').run(campaniaId);
     db.prepare('DELETE FROM flag WHERE campania_id = ?').run(campaniaId);
     db.prepare('DELETE FROM capitulo WHERE campania_id = ?').run(campaniaId);
     const resultado = db.prepare('DELETE FROM campania WHERE id = ?').run(campaniaId);

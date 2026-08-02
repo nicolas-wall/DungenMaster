@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { abrirDb } from '../src/db/client.js';
-import { crearCampania, crearCapitulo, crearPersonaje, pasarTurno } from '../src/db/repo.js';
+import { crearCampania, crearCapitulo, crearPersonaje, pasarTurno, vincularPersonajeACampania } from '../src/db/repo.js';
 
 const rutaDb = process.env.DB_PATH ?? path.resolve('data/campania.db');
 mkdirSync(path.dirname(rutaDb), { recursive: true });
@@ -18,7 +18,6 @@ const capitulo = crearCapitulo(db, {
 });
 
 const bruno = crearPersonaje(db, {
-  campaniaId: campania.id,
   jugador: 'hijo',
   nombre: 'Bruno',
   arquetipo: 'guardian',
@@ -27,9 +26,9 @@ const bruno = crearPersonaje(db, {
   corazon: 8,
   debilidad: 'Le tiene miedo a la oscuridad',
 });
+vincularPersonajeACampania(db, campania.id, bruno.id);
 
 const elian = crearPersonaje(db, {
-  campaniaId: campania.id,
   jugador: 'papa',
   nombre: 'Elián',
   arquetipo: 'explorador',
@@ -38,6 +37,7 @@ const elian = crearPersonaje(db, {
   corazon: 8,
   debilidad: 'No puede decir que no a un desafío',
 });
+vincularPersonajeACampania(db, campania.id, elian.id);
 
 pasarTurno(db, capitulo.id, bruno.id);
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { abrirDb } from './client.js';
-import { crearCampania, crearPersonaje } from './repo.js';
+import { crearPersonaje } from './repo.js';
 
 describe('migraciones', () => {
   it('crea todas las tablas del esquema', () => {
@@ -15,6 +15,7 @@ describe('migraciones', () => {
       [
         '_migraciones',
         'campania',
+        'campania_personaje',
         'capitulo',
         'flag',
         'hilo',
@@ -31,15 +32,13 @@ describe('migraciones', () => {
     const db = abrirDb(':memory:');
     expect(() => abrirDb(':memory:')).not.toThrow();
     const aplicadas = db.prepare('SELECT COUNT(*) as n FROM _migraciones').get() as { n: number };
-    expect(aplicadas.n).toBe(1);
+    expect(aplicadas.n).toBe(2);
   });
 
   it('el CHECK de atributos rechaza valores fuera de 8-16 a nivel de esquema', () => {
     const db = abrirDb(':memory:');
-    const campania = crearCampania(db, 'Test');
     expect(() =>
       crearPersonaje(db, {
-        campaniaId: campania.id,
         jugador: 'hijo',
         nombre: 'Roto',
         arquetipo: 'guardian',
@@ -52,10 +51,8 @@ describe('migraciones', () => {
 
   it('el CHECK de jugador rechaza valores fuera de papa/hijo', () => {
     const db = abrirDb(':memory:');
-    const campania = crearCampania(db, 'Test');
     expect(() =>
       crearPersonaje(db, {
-        campaniaId: campania.id,
         // @ts-expect-error probando el CHECK de la DB con un valor inválido
         jugador: 'abuelo',
         nombre: 'Roto',

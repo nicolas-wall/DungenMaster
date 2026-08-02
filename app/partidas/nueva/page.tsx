@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const ARQUETIPOS = [
@@ -28,24 +28,44 @@ type Paso =
   | 'intro'
   | 'campania'
   | 'jugador'
+  | 'elegirModo'
   | 'nombre'
   | 'arquetipo'
   | 'atributos'
   | 'objeto'
   | 'debilidad'
   | 'confirmarPersonaje'
+  | 'confirmarExistente'
   | 'confirmarTodo';
 
-interface PersonajeBorrador {
+interface PersonajeExistente {
+  id: string;
   jugador: 'papa' | 'hijo';
   nombre: string;
   arquetipo: string;
   fuerza: number;
   astucia: number;
   corazon: number;
-  objetoElegido: string;
-  debilidad: string;
+  hp: number;
+  hp_max: number;
+  debilidad: string | null;
+  capitulos_jugados: number;
+  items: { id: string; nombre: string }[];
 }
+
+type PersonajeParaCrear =
+  | {
+      modo: 'nuevo';
+      jugador: 'papa' | 'hijo';
+      nombre: string;
+      arquetipo: string;
+      fuerza: number;
+      astucia: number;
+      corazon: number;
+      objetoElegido: string;
+      debilidad: string;
+    }
+  | { modo: 'existente'; personajeId: string; jugador: 'papa' | 'hijo'; nombre: string };
 
 const PUNTOS_TOTALES = 30;
 const MIN_ATRIB = 8;
@@ -77,11 +97,14 @@ export default function NuevaPartida() {
   const [paso, setPaso] = useState<Paso>('intro');
   const [tituloCampania, setTituloCampania] = useState('');
   const [escenasTotal, setEscenasTotal] = useState(12);
-  const [personajesCreados, setPersonajesCreados] = useState<PersonajeBorrador[]>([]);
+  const [personajesCreados, setPersonajesCreados] = useState<PersonajeParaCrear[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // borrador del personaje que se está armando ahora
+  const [personajesExistentes, setPersonajesExistentes] = useState<PersonajeExistente[]>([]);
+  const [personajeExistenteElegido, setPersonajeExistenteElegido] = useState<PersonajeExistente | null>(null);
+
+  // borrador del personaje nuevo que se está armando ahora
   const [jugador, setJugador] = useState<'papa' | 'hijo' | null>(null);
   const [nombre, setNombre] = useState('');
   const [arquetipo, setArquetipo] = useState<string | null>(null);
@@ -89,10 +112,22 @@ export default function NuevaPartida() {
   const [objetoElegido, setObjetoElegido] = useState<string | null>(null);
   const [debilidad, setDebilidad] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetch('/api/personajes')
+      .then((r) => r.json())
+      .then((datos) => setPersonajesExistentes(datos.personajes ?? []))
+      .catch(() => {
+        // si falla, el wizard simplemente no ofrece reusar personajes
+      });
+  }, []);
+
   const puntosUsados = atributos.fuerza + atributos.astucia + atributos.corazon;
   const puntosRestantes = PUNTOS_TOTALES - puntosUsados;
   const arquetipoElegido = ARQUETIPOS.find((a) => a.id === arquetipo);
   const jugadorDisponible: 'papa' | 'hijo' = personajesCreados.some((p) => p.jugador === 'hijo') ? 'papa' : 'hijo';
+  const candidatosExistentes = personajesExistentes.filter(
+    (p) => p.jugador === jugador && !personajesCreados.some((c) => c.modo === 'existente' && c.personajeId === p.id),
+  );
 
   function reiniciarBorradorPersonaje() {
     setJugador(null);
@@ -101,6 +136,14 @@ export default function NuevaPartida() {
     setAtributos({ fuerza: MIN_ATRIB, astucia: MIN_ATRIB, corazon: MIN_ATRIB });
     setObjetoElegido(null);
     setDebilidad(null);
+    setPersonajeExistenteElegido(null);
+  }
+
+  function agregarPersonaje(nuevo: PersonajeParaCrear) {
+    const listaActualizada = [...personajesCreados, nuevo];
+    setPersonajesCreados(listaActualizada);
+    reiniciarBorradorPersonaje();
+    setPaso(listaActualizada.length < 2 ? 'jugador' : 'confirmarTodo');
   }
 
   function ajustarAtributo(clave: 'fuerza' | 'astucia' | 'corazon', delta: number) {
@@ -112,9 +155,10 @@ export default function NuevaPartida() {
     });
   }
 
-  function confirmarPersonajeActual() {
+  function confirmarPersonajeNuevo() {
     if (!jugador || !nombre.trim() || !arquetipo || !objetoElegido || !debilidad) return;
-    const nuevo: PersonajeBorrador = {
+    agregarPersonaje({
+      modo: 'nuevo',
       jugador,
       nombre: nombre.trim(),
       arquetipo,
@@ -123,11 +167,17 @@ export default function NuevaPartida() {
       corazon: atributos.corazon,
       objetoElegido,
       debilidad,
-    };
-    const listaActualizada = [...personajesCreados, nuevo];
-    setPersonajesCreados(listaActualizada);
-    reiniciarBorradorPersonaje();
-    setPaso(listaActualizada.length < 2 ? 'jugador' : 'confirmarTodo');
+    });
+  }
+
+  function confirmarPersonajeExistente() {
+    if (!personajeExistenteElegido) return;
+    agregarPersonaje({
+      modo: 'existente',
+      personajeId: personajeExistenteElegido.id,
+      jugador: personajeExistenteElegido.jugador,
+      nombre: personajeExistenteElegido.nombre,
+    });
   }
 
   async function crearPartida() {
@@ -143,13 +193,14 @@ export default function NuevaPartida() {
       if (!rCampania.ok) throw new Error(datosCampania.error ?? 'no se pudo crear la campaña');
 
       for (const p of personajesCreados) {
+        const payload = p.modo === 'existente' ? { personajeId: p.personajeId } : p;
         const rPersonaje = await fetch(`/api/campanias/${datosCampania.campania.id}/personajes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(p),
+          body: JSON.stringify(payload),
         });
         const datosPersonaje = await rPersonaje.json();
-        if (!rPersonaje.ok) throw new Error(datosPersonaje.error ?? `no se pudo crear a ${p.nombre}`);
+        if (!rPersonaje.ok) throw new Error(datosPersonaje.error ?? `no se pudo agregar a ${p.nombre}`);
       }
 
       router.push(`/partidas/${datosCampania.campania.id}`);
@@ -174,7 +225,7 @@ export default function NuevaPartida() {
               menor a su atributo, les sale bien.
               <br />
               <br />
-              Primero vamos a crear a sus héroes. Son seis preguntas cortas. ¿Empezamos?
+              Primero vamos a armar a sus héroes. ¿Empezamos?
             </p>
             <BotonPaso onClick={() => setPaso('campania')}>Empezamos</BotonPaso>
           </>
@@ -223,11 +274,79 @@ export default function NuevaPartida() {
               <BotonPaso
                 onClick={() => {
                   setJugador(jugadorDisponible);
-                  setPaso('nombre');
+                  const hayExistentes = personajesExistentes.some(
+                    (p) => p.jugador === jugadorDisponible && !personajesCreados.some((c) => c.modo === 'existente' && c.personajeId === p.id),
+                  );
+                  setPaso(hayExistentes ? 'elegirModo' : 'nombre');
                 }}
               >
                 {jugadorDisponible === 'hijo' ? 'El hijo' : 'El papá'}
               </BotonPaso>
+            </div>
+          </>
+        )}
+
+        {paso === 'elegirModo' && (
+          <>
+            <h2>¿Quién va a jugar {jugador === 'hijo' ? 'el hijo' : 'el papá'}?</h2>
+            <p style={{ opacity: 0.7 }}>Podés retomar un personaje que ya jugó otra aventura, o armar uno nuevo.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+              {candidatosExistentes.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    setPersonajeExistenteElegido(p);
+                    setPaso('confirmarExistente');
+                  }}
+                  style={{
+                    padding: 14,
+                    borderRadius: 8,
+                    border: '1px solid #333',
+                    background: '#181818',
+                    color: '#eee',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>{p.nombre}</div>
+                  <div style={{ fontSize: 13, opacity: 0.7 }}>
+                    {ARQUETIPOS.find((a) => a.id === p.arquetipo)?.nombre ?? p.arquetipo} — HP {p.hp}/{p.hp_max} —{' '}
+                    {p.capitulos_jugados} {p.capitulos_jugados === 1 ? 'capítulo jugado' : 'capítulos jugados'}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <BotonPaso onClick={() => setPaso('nombre')}>+ Crear un personaje nuevo</BotonPaso>
+          </>
+        )}
+
+        {paso === 'confirmarExistente' && personajeExistenteElegido && (
+          <>
+            <h2>{personajeExistenteElegido.nombre}</h2>
+            <div style={{ border: '1px solid #333', borderRadius: 12, padding: 16, width: '100%' }}>
+              <div>
+                {personajeExistenteElegido.jugador === 'hijo' ? 'El hijo' : 'El papá'} —{' '}
+                {ARQUETIPOS.find((a) => a.id === personajeExistenteElegido.arquetipo)?.nombre ?? personajeExistenteElegido.arquetipo}
+              </div>
+              <div style={{ marginTop: 8 }}>
+                Fuerza {personajeExistenteElegido.fuerza} · Astucia {personajeExistenteElegido.astucia} · Corazón{' '}
+                {personajeExistenteElegido.corazon}
+              </div>
+              {personajeExistenteElegido.items.length > 0 ? (
+                <div style={{ marginTop: 8, opacity: 0.8 }}>
+                  Inventario: {personajeExistenteElegido.items.map((i) => i.nombre).join(', ')}
+                </div>
+              ) : null}
+              {personajeExistenteElegido.debilidad ? (
+                <div style={{ marginTop: 4, opacity: 0.8 }}>Debilidad: {personajeExistenteElegido.debilidad}</div>
+              ) : null}
+              <div style={{ marginTop: 8, fontSize: 13, opacity: 0.6 }}>Arranca esta aventura con el HP completo.</div>
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <BotonPaso onClick={confirmarPersonajeExistente}>Confirmar a {personajeExistenteElegido.nombre}</BotonPaso>
+              <button onClick={() => setPaso('elegirModo')} style={{ background: 'transparent', border: '1px solid #444', color: '#aaa', borderRadius: 8, padding: '10px 20px' }}>
+                Volver
+              </button>
             </div>
           </>
         )}
@@ -370,7 +489,7 @@ export default function NuevaPartida() {
               <div style={{ marginTop: 8, opacity: 0.8 }}>Objeto: {objetoElegido}</div>
               <div style={{ marginTop: 4, opacity: 0.8 }}>Debilidad: {debilidad}</div>
             </div>
-            <BotonPaso onClick={confirmarPersonajeActual}>Confirmar a {nombre}</BotonPaso>
+            <BotonPaso onClick={confirmarPersonajeNuevo}>Confirmar a {nombre}</BotonPaso>
           </>
         )}
 
@@ -382,14 +501,19 @@ export default function NuevaPartida() {
                 <div key={p.nombre} style={{ border: '1px solid #333', borderRadius: 12, padding: 16 }}>
                   <div style={{ fontWeight: 700 }}>
                     {p.nombre} ({p.jugador === 'hijo' ? 'el hijo' : 'el papá'})
+                    {p.modo === 'existente' ? <span style={{ opacity: 0.5, fontWeight: 400 }}> — personaje ya creado</span> : null}
                   </div>
-                  <div style={{ fontSize: 14, opacity: 0.8 }}>
-                    {ARQUETIPOS.find((a) => a.id === p.arquetipo)?.nombre} — Fuerza {p.fuerza}, Astucia {p.astucia}, Corazón{' '}
-                    {p.corazon}
-                  </div>
-                  <div style={{ fontSize: 14, opacity: 0.6 }}>
-                    {p.objetoElegido} · {p.debilidad}
-                  </div>
+                  {p.modo === 'nuevo' ? (
+                    <>
+                      <div style={{ fontSize: 14, opacity: 0.8 }}>
+                        {ARQUETIPOS.find((a) => a.id === p.arquetipo)?.nombre} — Fuerza {p.fuerza}, Astucia {p.astucia}, Corazón{' '}
+                        {p.corazon}
+                      </div>
+                      <div style={{ fontSize: 14, opacity: 0.6 }}>
+                        {p.objetoElegido} · {p.debilidad}
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               ))}
             </div>

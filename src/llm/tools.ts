@@ -360,6 +360,7 @@ export function ejecutarTool(
       const errores = puedeCerrarCapitulo(fase);
       if (errores.length > 0) throw new Error(errores.join('; '));
       const capituloCerrado = repo.cerrarCapituloDb(db, capituloId, { titulo: args.titulo as string });
+      repo.incrementarCapitulosJugadosDeCampania(db, campaniaId);
       if (args.hilo_nuevo) {
         repo.crearHilo(db, {
           campaniaId,
