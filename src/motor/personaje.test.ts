@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validarAtributosCreacion } from './personaje.js';
+import { validarAtributosCreacion, validarNombrePersonaje } from './personaje.js';
 
 describe('validarAtributosCreacion', () => {
   it('acepta un reparto válido de 30 puntos entre 8 y 14', () => {
@@ -18,5 +18,21 @@ describe('validarAtributosCreacion', () => {
   it('rechaza si la suma no da 30', () => {
     const errores = validarAtributosCreacion({ fuerza: 10, astucia: 10, corazon: 9 });
     expect(errores.some((e) => e.includes('suma'))).toBe(true);
+  });
+});
+
+describe('validarNombrePersonaje', () => {
+  it('acepta nombres entre 2 y 20 caracteres', () => {
+    expect(validarNombrePersonaje('Bruno')).toEqual([]);
+    expect(validarNombrePersonaje('Al')).toEqual([]);
+  });
+
+  it('rechaza nombres muy cortos o muy largos', () => {
+    expect(validarNombrePersonaje('A').length).toBeGreaterThan(0);
+    expect(validarNombrePersonaje('Un nombre demasiado largo para un personaje').length).toBeGreaterThan(0);
+  });
+
+  it('recorta espacios antes de validar', () => {
+    expect(validarNombrePersonaje('  Bruno  ')).toEqual([]);
   });
 });

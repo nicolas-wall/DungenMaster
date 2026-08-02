@@ -10,7 +10,46 @@ export const runtime = 'nodejs';
 export async function POST(request: Request): Promise<Response> {
   const database = db();
 
-  const campania = repo.campaniaMasReciente(database);
+  let texto: string;
+  let autorId: string;
+  let campaniaIdParam: string | undefined;
+
+  const contentType = request.headers.get('content-type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    const cuerpo = (await request.json()) as { texto?: string; autorId?: string; campaniaId?: string };
+    if (!cuerpo.texto || !cuerpo.autorId) {
+      return Response.json({ error: 'faltan "texto" y "autorId" en el body' }, { status: 400 });
+    }
+    texto = cuerpo.texto;
+    autorId = cuerpo.autorId;
+    campaniaIdParam = cuerpo.campaniaId;
+  } else if (contentType.includes('multipart/form-data')) {
+    const form = await request.formData();
+    const audio = form.get('audio');
+    autorId = String(form.get('autorId') ?? '');
+    campaniaIdParam = form.get('campaniaId') ? String(form.get('campaniaId')) : undefined;
+    if (!(audio instanceof Blob) || !autorId) {
+      return Response.json({ error: 'faltan "audio" y "autorId" en el form-data' }, { status: 400 });
+    }
+    const buffer = Buffer.from(await audio.arrayBuffer());
+    const transcripcion = await transcribir(buffer, 'es');
+    texto = transcripcion || '(dijo algo que no se entendió del todo, interpretá la opción más plausible)';
+  } else {
+    return Response.json({ error: `content-type no soportado: ${contentType}` }, { status: 400 });
+  }
+
+  let campania: repo.Campania | null;
+  if (campaniaIdParam) {
+    try {
+      campania = repo.obtenerCampania(database, campaniaIdParam);
+    } catch {
+      campania = null;
+    }
+  } else {
+    campania = repo.campaniaMasReciente(database);
+  }
+
   if (!campania) {
     return Response.json(
       { error: 'No hay ninguna campaña creada todavía. Corré "npm run seed" primero.' },
@@ -21,32 +60,6 @@ export async function POST(request: Request): Promise<Response> {
   const capitulo = repo.capituloEnCursoDeCampania(database, campania.id);
   if (!capitulo) {
     return Response.json({ error: 'La campaña no tiene ningún capítulo en curso.' }, { status: 400 });
-  }
-
-  let texto: string;
-  let autorId: string;
-
-  const contentType = request.headers.get('content-type') ?? '';
-
-  if (contentType.includes('application/json')) {
-    const cuerpo = (await request.json()) as { texto?: string; autorId?: string };
-    if (!cuerpo.texto || !cuerpo.autorId) {
-      return Response.json({ error: 'faltan "texto" y "autorId" en el body' }, { status: 400 });
-    }
-    texto = cuerpo.texto;
-    autorId = cuerpo.autorId;
-  } else if (contentType.includes('multipart/form-data')) {
-    const form = await request.formData();
-    const audio = form.get('audio');
-    autorId = String(form.get('autorId') ?? '');
-    if (!(audio instanceof Blob) || !autorId) {
-      return Response.json({ error: 'faltan "audio" y "autorId" en el form-data' }, { status: 400 });
-    }
-    const buffer = Buffer.from(await audio.arrayBuffer());
-    const transcripcion = await transcribir(buffer, 'es');
-    texto = transcripcion || '(dijo algo que no se entendió del todo, interpretá la opción más plausible)';
-  } else {
-    return Response.json({ error: `content-type no soportado: ${contentType}` }, { status: 400 });
   }
 
   let provider;

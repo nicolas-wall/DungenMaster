@@ -481,3 +481,59 @@ export function cerrarSesion(db: Database.Database, sesionId: string): void {
     sesionId,
   );
 }
+
+// --- Lobby / listado de partidas ---
+
+export interface CampaniaResumen {
+  id: string;
+  titulo: string;
+  creadaEn: number;
+  capitulo: { id: string; numero: number; escenaActual: number; escenasTotal: number } | null;
+  personajes: { id: string; nombre: string; arquetipo: string; hp: number; hpMax: number }[];
+}
+
+export function listarCampanias(db: Database.Database): CampaniaResumen[] {
+  const campanias = db.prepare('SELECT * FROM campania ORDER BY creada_en DESC').all() as Campania[];
+
+  return campanias.map((c) => {
+    const capitulo = capituloEnCursoDeCampania(db, c.id);
+    const personajes = personajesDeCampania(db, c.id).map((p) => ({
+      id: p.id,
+      nombre: p.nombre,
+      arquetipo: p.arquetipo,
+      hp: p.hp,
+      hpMax: p.hp_max,
+    }));
+
+    return {
+      id: c.id,
+      titulo: c.titulo,
+      creadaEn: c.creada_en,
+      capitulo: capitulo
+        ? { id: capitulo.id, numero: capitulo.numero, escenaActual: capitulo.escena_actual, escenasTotal: capitulo.escenas_total }
+        : null,
+      personajes,
+    };
+  });
+}
+
+export interface PersonajeDetalle extends Personaje {
+  items: Item[];
+}
+
+export interface CampaniaDetalle {
+  campania: Campania;
+  capitulo: Capitulo | null;
+  personajes: PersonajeDetalle[];
+}
+
+export function detalleCampania(db: Database.Database, campaniaId: string): CampaniaDetalle {
+  const campania = obtenerCampania(db, campaniaId);
+  const capitulo = capituloEnCursoDeCampania(db, campaniaId);
+  const personajes = personajesDeCampania(db, campaniaId).map((p) => ({
+    ...p,
+    items: itemsDePersonaje(db, p.id),
+  }));
+
+  return { campania, capitulo, personajes };
+}

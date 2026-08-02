@@ -12,10 +12,22 @@ export const runtime = 'nodejs';
  * nueva, y si el capítulo ya tenía turnos jugados, genera el recap de
  * "la última vez..." con voz.
  */
-export async function POST(): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
   const database = db();
 
-  const campania = repo.campaniaMasReciente(database);
+  const cuerpo = (await request.json().catch(() => ({}))) as { campaniaId?: string };
+
+  let campania: repo.Campania | null;
+  if (cuerpo.campaniaId) {
+    try {
+      campania = repo.obtenerCampania(database, cuerpo.campaniaId);
+    } catch {
+      campania = null;
+    }
+  } else {
+    campania = repo.campaniaMasReciente(database);
+  }
+
   if (!campania) {
     return Response.json({ error: 'No hay ninguna campaña creada todavía. Corré "npm run seed" primero.' }, { status: 400 });
   }

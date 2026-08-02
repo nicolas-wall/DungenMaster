@@ -3,10 +3,21 @@ import * as repo from '../../../src/db/repo.js';
 
 export const runtime = 'nodejs';
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   const database = db();
 
-  const campania = repo.campaniaMasReciente(database);
+  const campaniaIdParam = new URL(request.url).searchParams.get('campaniaId');
+  let campania: repo.Campania | null;
+  if (campaniaIdParam) {
+    try {
+      campania = repo.obtenerCampania(database, campaniaIdParam);
+    } catch {
+      campania = null;
+    }
+  } else {
+    campania = repo.campaniaMasReciente(database);
+  }
+
   if (!campania) return Response.json({ lista: false });
 
   const capitulo = repo.capituloEnCursoDeCampania(database, campania.id);

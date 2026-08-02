@@ -29,3 +29,15 @@ export function validarAtributosCreacion(atributos: AtributosCreacion): string[]
 
   return errores;
 }
+
+const NOMBRE_MIN = 2;
+const NOMBRE_MAX = 20;
+
+/** Nombre de personaje: 2-20 caracteres (CLAUDE.md sección 6). */
+export function validarNombrePersonaje(nombre: string): string[] {
+  const limpio = nombre.trim();
+  if (limpio.length < NOMBRE_MIN || limpio.length > NOMBRE_MAX) {
+    return [`el nombre debe tener entre ${NOMBRE_MIN} y ${NOMBRE_MAX} caracteres, recibido ${limpio.length}`];
+  }
+  return [];
+}
