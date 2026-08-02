@@ -100,6 +100,33 @@ describe('correrTurno', () => {
     expect(flags['_tirada_pendiente_objetivo']).toBe('');
   });
 
+  it('resuelve la tirada por código en el turno siguiente aunque el modelo no llame a resolver_tirada', async () => {
+    // Reproduce el bug reportado: el jugador dice el número del dado en un
+    // turno nuevo (después de que pedir_tirada ya corrió en el turno
+    // anterior) y el modelo, esta vez, no llama a ninguna tool — solo
+    // vuelve a preguntar. El código tiene que resolver igual.
+    const providerTurno1 = new LLMFalso([
+      toolCallMsg('pedir_tirada', { personaje_id: brunoId, atributo: 'fuerza' }), // objetivo = 12
+      { role: 'assistant', content: '¿Tirás el dado de Fuerza?' },
+    ]);
+    await correrTurno(providerTurno1, { db, campaniaId, capituloId }, 'Intento mover la piedra', brunoId);
+
+    expect(repo.obtenerFlags(db, campaniaId)['_tirada_pendiente_objetivo']).toBe('12');
+
+    // El modelo del segundo turno "se olvida" de llamar a resolver_tirada.
+    const providerTurno2 = new LLMFalso([
+      { role: 'assistant', content: '¿Qué sacaste en el dado?' },
+    ]);
+    const resultado = await correrTurno(providerTurno2, { db, campaniaId, capituloId }, 'saqué un 8', brunoId);
+
+    // A pesar de que el modelo no llamó a la tool, el código ya resolvió
+    // la tirada antes de siquiera preguntarle al modelo.
+    expect(resultado.toolsEjecutadas).toEqual([
+      { nombre: 'resolver_tirada', args: { valor: 8 }, resultado: { exito: true, objetivo: 12 } },
+    ]);
+    expect(repo.obtenerFlags(db, campaniaId)['_tirada_pendiente_objetivo']).toBe('');
+  });
+
   it('tira un error claro si el modelo nunca deja de pedir tools', async () => {
     const respuestasInfinitas = Array.from({ length: 10 }, () =>
       toolCallMsg('marcar_fin_de_escena', {}),

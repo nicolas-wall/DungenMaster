@@ -16,7 +16,7 @@ export interface ContextoTurno {
 const ATRIBUTOS = ['fuerza', 'astucia', 'corazon'] as const;
 type Atributo = (typeof ATRIBUTOS)[number];
 
-const FLAG_TIRADA_PENDIENTE = '_tirada_pendiente_objetivo';
+export const FLAG_TIRADA_PENDIENTE = '_tirada_pendiente_objetivo';
 
 /**
  * Todas las tools de la sección 5 de CLAUDE.md. El modelo nunca decide

@@ -1,7 +1,8 @@
 import type Database from 'better-sqlite3';
 import * as repo from '../db/repo.js';
 import { estadoRitmo } from '../motor/fase.js';
-import { TOOLS, ejecutarTool, type ContextoTurno } from './tools.js';
+import { parseNumeroHablado } from '../motor/numeros.js';
+import { TOOLS, ejecutarTool, FLAG_TIRADA_PENDIENTE, type ContextoTurno } from './tools.js';
 import type { LLMProvider, Mensaje } from './provider.js';
 
 const SYSTEM_PROMPT = `Sos el narrador de un juego de rol presencial para dos jugadores: un adulto y
@@ -77,6 +78,8 @@ function serializarEstado(db: Database.Database, campaniaId: string, capituloId:
   const flagsRelevantes = Object.entries(flags).filter(([clave]) => !clave.startsWith('_'));
   const lineasFlags = flagsRelevantes.map(([clave, valor]) => `- ${clave}: ${valor}`).join('\n');
 
+  const objetivoPendiente = flags[FLAG_TIRADA_PENDIENTE];
+
   return [
     'ESTADO ACTUAL',
     `Turno de: ${capitulo.turno_actual ?? '(sin definir)'}`,
@@ -85,6 +88,9 @@ function serializarEstado(db: Database.Database, campaniaId: string, capituloId:
     'NPCs presentes:',
     lineasNpcs || '(ninguno)',
     flagsRelevantes.length ? `Flags:\n${lineasFlags}` : '',
+    objetivoPendiente
+      ? `TIRADA PENDIENTE: hay un chequeo esperando resultado, objetivo ${objetivoPendiente} (igual o menos = éxito). Si el jugador te dice un número, resolvelo — no vuelvas a pedir la tirada.`
+      : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -101,7 +107,12 @@ function bloqueRitmo(db: Database.Database, capituloId: string): string {
   ].join('\n');
 }
 
-function construirContexto(db: Database.Database, campaniaId: string, capituloId: string): Mensaje[] {
+function construirContexto(
+  db: Database.Database,
+  campaniaId: string,
+  capituloId: string,
+  notaExtra?: string,
+): Mensaje[] {
   const campania = repo.obtenerCampania(db, campaniaId);
   const capitulo = repo.obtenerCapitulo(db, capituloId);
 
@@ -111,6 +122,7 @@ function construirContexto(db: Database.Database, campaniaId: string, capituloId
     capitulo.resumen ? `RESUMEN DEL CAPÍTULO\n${capitulo.resumen}` : '',
     serializarEstado(db, campaniaId, capituloId),
     bloqueRitmo(db, capituloId),
+    notaExtra ?? '',
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -150,8 +162,34 @@ export async function correrTurno(
 
   repo.registrarTurno(db, { capituloId, autor, texto });
 
-  const mensajes = construirContexto(db, campaniaId, capituloId);
   const toolsEjecutadas: ResultadoTurno['toolsEjecutadas'] = [];
+  let notaAutoResolucion: string | undefined;
+
+  // Resolver la tirada es la mecánica más frágil para dejarla en manos del
+  // tool-calling del modelo (visto en pruebas reales: a veces no llama a
+  // resolver_tirada y se queda repreguntando). Si hay una tirada pendiente
+  // y el jugador dijo un número, el código la resuelve acá directamente —
+  // "el código resuelve" también aplica al parseo del número, no solo al
+  // veredicto.
+  const flagsPrevios = repo.obtenerFlags(db, campaniaId);
+  if (flagsPrevios[FLAG_TIRADA_PENDIENTE]) {
+    const valor = parseNumeroHablado(texto);
+    if (valor !== null) {
+      const resultado = ejecutarTool(ctx, 'resolver_tirada', { valor }) as {
+        exito: boolean;
+        objetivo: number;
+      };
+      toolsEjecutadas.push({ nombre: 'resolver_tirada', args: { valor }, resultado });
+      notaAutoResolucion = [
+        'TIRADA YA RESUELTA POR EL CÓDIGO (no la vuelvas a pedir, no ignores este resultado):',
+        `el jugador dijo "${texto}", se interpretó como ${valor} contra objetivo ${resultado.objetivo}`,
+        `→ ${resultado.exito ? 'ÉXITO' : 'FRACASO'}.`,
+        'Narrá la consecuencia de este resultado ahora mismo, no llames a pedir_tirada ni resolver_tirada de nuevo.',
+      ].join(' ');
+    }
+  }
+
+  const mensajes = construirContexto(db, campaniaId, capituloId, notaAutoResolucion);
   let tokensIn = 0;
   let tokensOut = 0;
 
