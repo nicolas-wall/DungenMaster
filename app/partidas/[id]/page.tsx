@@ -189,56 +189,54 @@ export default function PaginaPartida() {
   const personajeTurno = estado.personajes?.find((p) => p.id === estado.capitulo?.turno_actual);
 
   return (
-    <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 24, gap: 24 }}>
-      <nav style={{ width: '100%', maxWidth: 640, display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-        <Link href="/" style={{ color: '#8ab4f8' }}>
-          ← Partidas
-        </Link>
-        <Link href={`/partidas/${campaniaId}/personajes`} style={{ color: '#8ab4f8' }}>
-          Ver personajes
-        </Link>
+    <main className="page">
+      <nav className="nav-bar page-narrow">
+        <Link href="/" className="nav-link">← Partidas</Link>
+        <Link href={`/partidas/${campaniaId}/personajes`} className="nav-link">Ver personajes</Link>
       </nav>
 
       <section style={{ textAlign: 'center' }}>
-        {estado.campania ? <div style={{ opacity: 0.5, marginBottom: 4 }}>{estado.campania.titulo}</div> : null}
-        <div style={{ fontSize: 18, opacity: 0.7, letterSpacing: 2 }}>TURNO</div>
-        <div style={{ fontSize: 48, fontWeight: 700 }}>{personajeTurno?.nombre ?? '—'}</div>
+        {estado.campania ? <div className="faint" style={{ marginBottom: 6 }}>{estado.campania.titulo}</div> : null}
+        <div className="eyebrow">Turno</div>
+        <div style={{ fontSize: 46, fontWeight: 800, marginTop: 2 }}>{personajeTurno?.nombre ?? '—'}</div>
 
         {estado.tirada_pendiente ? (
           <div
+            className="card"
             style={{
-              marginTop: 16,
+              marginTop: 18,
               display: 'inline-block',
-              border: '4px solid #eee',
-              borderRadius: 12,
-              padding: '12px 32px',
+              borderColor: 'var(--accent)',
+              boxShadow: '0 0 0 3px rgba(255, 182, 72, 0.15)',
+              padding: '14px 36px',
             }}
           >
-            <div style={{ fontSize: 16, opacity: 0.7 }}>OBJETIVO</div>
-            <div style={{ fontSize: 64, fontWeight: 800 }}>≤ {estado.tirada_pendiente}</div>
+            <div className="eyebrow" style={{ color: 'var(--accent)' }}>Objetivo</div>
+            <div style={{ fontSize: 60, fontWeight: 800, color: 'var(--accent)' }}>≤ {estado.tirada_pendiente}</div>
           </div>
         ) : null}
 
-        <div style={{ marginTop: 16, display: 'flex', gap: 24, justifyContent: 'center' }}>
+        <div style={{ marginTop: 18, display: 'flex', gap: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
           {estado.personajes?.map((p) => (
-            <div key={p.id}>
-              {p.nombre} {'♥'.repeat(p.hp)}
-              <span style={{ opacity: 0.3 }}>{'♥'.repeat(Math.max(0, p.hp_max - p.hp))}</span>
+            <div key={p.id} style={{ fontWeight: 700 }}>
+              {p.nombre}{' '}
+              <span className="hearts-full">{'♥'.repeat(p.hp)}</span>
+              <span className="hearts-empty">{'♥'.repeat(Math.max(0, p.hp_max - p.hp))}</span>
             </div>
           ))}
         </div>
 
         {estado.capitulo ? (
-          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.5 }}>
+          <div className="faint" style={{ marginTop: 10, fontSize: 12 }}>
             escena {estado.capitulo.escena_actual} / {estado.capitulo.escenas_total}
           </div>
         ) : (
-          <div style={{ marginTop: 8, fontSize: 14, opacity: 0.7 }}>Cargando partida…</div>
+          <div className="subtle" style={{ marginTop: 10, fontSize: 14 }}>Cargando partida…</div>
         )}
       </section>
 
-      <section style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-        <select value={autorId} onChange={(e) => setAutorId(e.target.value)} style={{ padding: 8 }}>
+      <section style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+        <select value={autorId} onChange={(e) => setAutorId(e.target.value)} className="input" style={{ width: 'auto', minWidth: 160, textAlign: 'center', fontWeight: 700 }}>
           {estado.personajes?.map((p) => (
             <option key={p.id} value={p.id}>
               {p.nombre}
@@ -251,57 +249,51 @@ export default function PaginaPartida() {
           onMouseUp={terminarGrabacion}
           onMouseLeave={() => grabando && terminarGrabacion()}
           disabled={procesando || !autorId}
+          className="btn-ptt"
           style={{
-            width: 160,
-            height: 160,
-            borderRadius: '50%',
-            fontSize: 18,
-            fontWeight: 700,
-            background: grabando ? '#c0392b' : procesando ? '#555' : '#2ecc71',
-            color: '#fff',
-            border: 'none',
+            background: grabando ? 'var(--danger)' : procesando ? 'var(--bg-elevated)' : 'var(--primary)',
+            color: grabando ? '#3a0d0d' : procesando ? 'var(--text-dim)' : 'var(--primary-ink)',
+            border: procesando ? '2px solid var(--border-strong)' : 'none',
             cursor: procesando ? 'wait' : 'pointer',
+            boxShadow: grabando ? '0 0 0 10px rgba(255, 107, 107, 0.18)' : '0 8px 24px rgba(53, 208, 160, 0.25)',
           }}
         >
-          {grabando ? 'SOLTÁ PARA\nENVIAR' : procesando ? 'PENSANDO…' : 'MANTENÉ\nAPRETADO\nPARA HABLAR'}
+          {grabando ? '🎙️\nSOLTÁ PARA\nENVIAR' : procesando ? 'PENSANDO…' : '🎙️\nMANTENÉ\nAPRETADO'}
         </button>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 4, width: '100%', maxWidth: 420 }}>
           <input
             value={textoInput}
             onChange={(e) => setTextoInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && enviarTexto()}
             placeholder="…o escribí acá para probar sin voz"
             disabled={procesando}
-            style={{ padding: 8, width: 320 }}
+            className="input"
           />
-          <button onClick={enviarTexto} disabled={procesando || !textoInput.trim()}>
+          <button onClick={enviarTexto} disabled={procesando || !textoInput.trim()} className="btn btn-primary">
             Enviar
           </button>
         </div>
 
-        {error ? <div style={{ color: '#e74c3c' }}>{error}</div> : null}
+        {error ? <div className="error-box">{error}</div> : null}
       </section>
 
-      <section style={{ width: '100%', maxWidth: 640 }}>
-        <div style={{ opacity: 0.5, marginBottom: 8, fontSize: 13, letterSpacing: 1 }}>TRANSCRIPCIÓN</div>
+      <section className="page-narrow">
+        <div className="eyebrow" style={{ marginBottom: 8 }}>Transcripción</div>
         <div
           ref={transcripcionRef}
-          style={{
-            maxHeight: 260,
-            overflowY: 'auto',
-            border: '1px solid #333',
-            borderRadius: 8,
-            padding: 12,
-            fontSize: 14,
-          }}
+          className="card"
+          style={{ maxHeight: 260, overflowY: 'auto', fontSize: 14, lineHeight: 1.5 }}
         >
           {log.length === 0 ? (
-            <div style={{ opacity: 0.4 }}>Todavía no pasó nada.</div>
+            <div className="faint">Todavía no pasó nada.</div>
           ) : (
             log.map((entrada, i) => (
-              <div key={i} style={{ marginBottom: 8 }}>
-                <strong>{entrada.quien === 'dm' ? 'DM' : 'Jugador'}:</strong> {entrada.texto}
+              <div key={i} style={{ marginBottom: 10 }}>
+                <strong style={{ color: entrada.quien === 'dm' ? 'var(--primary)' : 'var(--accent)' }}>
+                  {entrada.quien === 'dm' ? 'DM' : 'Jugador'}:
+                </strong>{' '}
+                {entrada.texto}
               </div>
             ))
           )}

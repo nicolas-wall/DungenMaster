@@ -36,8 +36,8 @@ interface CampaniaDetalle {
 function Atributo({ nombre, valor }: { nombre: string; valor: number }) {
   return (
     <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: 12, opacity: 0.6, letterSpacing: 1 }}>{nombre.toUpperCase()}</div>
-      <div style={{ fontSize: 28, fontWeight: 700 }}>{valor}</div>
+      <div className="eyebrow" style={{ fontSize: 10 }}>{nombre}</div>
+      <div style={{ fontSize: 26, fontWeight: 800 }}>{valor}</div>
     </div>
   );
 }
@@ -58,44 +58,34 @@ export default function PaginaPersonajes() {
   }, [campaniaId]);
 
   return (
-    <main style={{ minHeight: '100vh', padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
-      <nav style={{ width: '100%', maxWidth: 700 }}>
-        <Link href={`/partidas/${campaniaId}`} style={{ color: '#8ab4f8', fontSize: 14 }}>
-          ← Volver a la partida
-        </Link>
+    <main className="page">
+      <nav className="nav-bar page-wide">
+        <Link href={`/partidas/${campaniaId}`} className="nav-link">← Volver a la partida</Link>
+        <span />
       </nav>
 
-      {error ? <div style={{ color: '#e74c3c' }}>{error}</div> : null}
+      {error ? <div className="error-box">{error}</div> : null}
 
       {detalle ? (
         <>
-          <h1 style={{ margin: 0, textAlign: 'center' }}>{detalle.campania.titulo}</h1>
+          <h1 style={{ textAlign: 'center', fontSize: 28 }}>{detalle.campania.titulo}</h1>
 
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: 700 }}>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: 700 }}>
             {detalle.personajes.map((p) => (
-              <div
-                key={p.id}
-                style={{
-                  border: '1px solid #333',
-                  borderRadius: 12,
-                  padding: 20,
-                  width: 300,
-                  background: '#181818',
-                }}
-              >
-                <div style={{ fontSize: 12, opacity: 0.5, letterSpacing: 1 }}>{p.jugador.toUpperCase()}</div>
-                <div style={{ fontSize: 26, fontWeight: 700 }}>{p.nombre}</div>
-                <div style={{ opacity: 0.7, marginBottom: 12 }}>{obtenerArquetipo(p.arquetipo)?.nombre ?? p.arquetipo}</div>
+              <div key={p.id} className="card" style={{ width: 300 }}>
+                <span className="badge">{p.jugador === 'hijo' ? 'Hijo' : 'Papá'}</span>
+                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>{p.nombre}</div>
+                <div className="subtle" style={{ marginBottom: 14 }}>{obtenerArquetipo(p.arquetipo)?.nombre ?? p.arquetipo}</div>
 
-                <div style={{ marginBottom: 12 }}>
-                  {'♥'.repeat(p.hp)}
-                  <span style={{ opacity: 0.3 }}>{'♥'.repeat(Math.max(0, p.hp_max - p.hp))}</span>{' '}
-                  <span style={{ fontSize: 13, opacity: 0.6 }}>
+                <div style={{ marginBottom: 16 }}>
+                  <span className="hearts-full">{'♥'.repeat(p.hp)}</span>
+                  <span className="hearts-empty">{'♥'.repeat(Math.max(0, p.hp_max - p.hp))}</span>{' '}
+                  <span className="faint" style={{ fontSize: 13 }}>
                     HP {p.hp}/{p.hp_max}
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: 16 }}>
+                <div className="card" style={{ display: 'flex', justifyContent: 'space-around', marginBottom: 16, background: 'var(--bg-elevated)' }}>
                   <Atributo nombre="Fuerza" valor={p.fuerza} />
                   <Atributo nombre="Astucia" valor={p.astucia} />
                   <Atributo nombre="Corazón" valor={p.corazon} />
@@ -103,15 +93,15 @@ export default function PaginaPersonajes() {
 
                 {p.debilidad ? (
                   <div style={{ marginBottom: 12, fontSize: 14 }}>
-                    <span style={{ opacity: 0.6 }}>Debilidad: </span>
+                    <span className="faint">Debilidad: </span>
                     {p.debilidad}
                   </div>
                 ) : null}
 
                 <div style={{ fontSize: 14 }}>
-                  <div style={{ opacity: 0.6, marginBottom: 4 }}>Inventario</div>
+                  <div className="faint" style={{ marginBottom: 4 }}>Inventario</div>
                   {p.items.length === 0 ? (
-                    <div style={{ opacity: 0.4 }}>(vacío)</div>
+                    <div className="faint">(vacío)</div>
                   ) : (
                     <ul style={{ margin: 0, paddingLeft: 18 }}>
                       {p.items.map((item) => (
@@ -124,7 +114,7 @@ export default function PaginaPersonajes() {
                   )}
                 </div>
 
-                <div style={{ marginTop: 12, fontSize: 12, opacity: 0.4 }}>
+                <div className="faint" style={{ marginTop: 14, fontSize: 12 }}>
                   Capítulos jugados: {p.capitulos_jugados}
                 </div>
               </div>
@@ -132,11 +122,11 @@ export default function PaginaPersonajes() {
           </div>
 
           {detalle.personajes.length === 0 ? (
-            <div style={{ opacity: 0.6 }}>Todavía no hay personajes en esta campaña.</div>
+            <div className="subtle">Todavía no hay personajes en esta campaña.</div>
           ) : null}
         </>
       ) : !error ? (
-        <div style={{ opacity: 0.6 }}>Cargando…</div>
+        <div className="subtle">Cargando…</div>
       ) : null}
     </main>
   );

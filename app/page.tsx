@@ -11,6 +11,15 @@ interface CampaniaResumen {
   personajes: { id: string; nombre: string; arquetipo: string; hp: number; hpMax: number }[];
 }
 
+function Corazones({ hp, hpMax }: { hp: number; hpMax: number }) {
+  return (
+    <span>
+      <span className="hearts-full">{'♥'.repeat(hp)}</span>
+      <span className="hearts-empty">{'♥'.repeat(Math.max(0, hpMax - hp))}</span>
+    </span>
+  );
+}
+
 export default function Lobby() {
   const [campanias, setCampanias] = useState<CampaniaResumen[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,70 +54,55 @@ export default function Lobby() {
   }
 
   return (
-    <main style={{ minHeight: '100vh', padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
-      <h1 style={{ marginBottom: 0 }}>Partidas</h1>
+    <main className="page">
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 40, lineHeight: 1 }}>🐉</div>
+        <h1 style={{ fontSize: 32, marginTop: 8 }}>Tus aventuras</h1>
+      </div>
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <Link
-          href="/partidas/nueva"
-          style={{
-            background: '#2ecc71',
-            color: '#111',
-            fontWeight: 700,
-            padding: '12px 28px',
-            borderRadius: 8,
-            textDecoration: 'none',
-          }}
-        >
-          + Nueva partida
+      <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+        <Link href="/partidas/nueva" className="btn btn-primary">
+          ✨ Nueva partida
         </Link>
-        <Link href="/personajes" style={{ color: '#8ab4f8', fontSize: 14 }}>
+        <Link href="/personajes" className="nav-link">
           Ver personajes
         </Link>
       </div>
 
-      {error ? <div style={{ color: '#e74c3c' }}>{error}</div> : null}
+      {error ? <div className="error-box">{error}</div> : null}
 
-      <div style={{ width: '100%', maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {campanias === null && !error ? <div style={{ opacity: 0.6, textAlign: 'center' }}>Cargando…</div> : null}
+      <div className="page-wide" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {campanias === null && !error ? <div className="subtle" style={{ textAlign: 'center' }}>Cargando…</div> : null}
 
         {campanias?.length === 0 ? (
-          <div style={{ opacity: 0.6, textAlign: 'center' }}>Todavía no hay ninguna partida. Creá la primera.</div>
+          <div className="card" style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📜</div>
+            <div className="subtle">Todavía no hay ninguna partida. ¡Creá la primera arriba!</div>
+          </div>
         ) : null}
 
         {campanias?.map((c) => (
           <div
             key={c.id}
+            className="card"
             style={{
               display: 'flex',
               alignItems: 'stretch',
               gap: 8,
-              border: '1px solid #333',
-              borderRadius: 12,
-              background: '#181818',
+              padding: 0,
               opacity: borrando === c.id ? 0.5 : 1,
             }}
           >
-            <Link
-              href={`/partidas/${c.id}`}
-              style={{
-                display: 'block',
-                flex: 1,
-                padding: 16,
-                textDecoration: 'none',
-                color: 'inherit',
-              }}
-            >
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{c.titulo}</div>
-              <div style={{ fontSize: 14, opacity: 0.7, marginTop: 4 }}>
+            <Link href={`/partidas/${c.id}`} className="card-link" style={{ flex: 1, padding: '18px 20px', borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ fontSize: 21, fontWeight: 800 }}>{c.titulo}</div>
+              <div className="subtle" style={{ fontSize: 14, marginTop: 4 }}>
                 {c.personajes.map((p) => p.nombre).join(' y ') || 'sin personajes'}
-                {c.capitulo ? ` — capítulo ${c.capitulo.numero}, escena ${c.capitulo.escenaActual}/${c.capitulo.escenasTotal}` : ''}
+                {c.capitulo ? ` · capítulo ${c.capitulo.numero}, escena ${c.capitulo.escenaActual}/${c.capitulo.escenasTotal}` : ''}
               </div>
-              <div style={{ marginTop: 8, display: 'flex', gap: 16 }}>
+              <div style={{ marginTop: 10, display: 'flex', gap: 20 }}>
                 {c.personajes.map((p) => (
-                  <span key={p.id} style={{ fontSize: 13 }}>
-                    {p.nombre} {'♥'.repeat(p.hp)}
-                    <span style={{ opacity: 0.3 }}>{'♥'.repeat(Math.max(0, p.hpMax - p.hp))}</span>
+                  <span key={p.id} style={{ fontSize: 14 }}>
+                    <strong>{p.nombre}</strong> <Corazones hp={p.hp} hpMax={p.hpMax} />
                   </span>
                 ))}
               </div>
@@ -116,18 +110,11 @@ export default function Lobby() {
 
             {confirmando === c.id ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px' }}>
-                <span style={{ fontSize: 13, opacity: 0.8 }}>¿Borrar?</span>
-                <button
-                  onClick={() => confirmarBorrado(c.id)}
-                  disabled={borrando === c.id}
-                  style={{ background: '#e74c3c', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}
-                >
+                <span className="subtle" style={{ fontSize: 13 }}>¿Borrar?</span>
+                <button onClick={() => confirmarBorrado(c.id)} disabled={borrando === c.id} className="btn btn-danger" style={{ padding: '8px 16px', fontSize: 14 }}>
                   Sí, borrar
                 </button>
-                <button
-                  onClick={() => setConfirmando(null)}
-                  style={{ background: 'transparent', color: '#aaa', border: '1px solid #444', borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}
-                >
+                <button onClick={() => setConfirmando(null)} className="btn btn-outline" style={{ padding: '8px 16px', fontSize: 14 }}>
                   Cancelar
                 </button>
               </div>
@@ -136,14 +123,8 @@ export default function Lobby() {
                 onClick={() => setConfirmando(c.id)}
                 disabled={borrando === c.id}
                 title="Borrar esta partida"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#e74c3c',
-                  fontSize: 18,
-                  padding: '0 18px',
-                  cursor: borrando === c.id ? 'wait' : 'pointer',
-                }}
+                className="btn-icon"
+                style={{ margin: '0 8px' }}
               >
                 🗑
               </button>

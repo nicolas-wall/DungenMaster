@@ -60,43 +60,38 @@ export default function PaginaPersonajesGlobal() {
   }
 
   return (
-    <main style={{ minHeight: '100vh', padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
-      <nav style={{ width: '100%', maxWidth: 700 }}>
-        <Link href="/" style={{ color: '#8ab4f8', fontSize: 14 }}>
-          ← Partidas
-        </Link>
+    <main className="page">
+      <nav className="nav-bar page-wide">
+        <Link href="/" className="nav-link">← Partidas</Link>
+        <span />
       </nav>
 
-      <h1 style={{ margin: 0 }}>Personajes</h1>
-      <p style={{ opacity: 0.6, marginTop: -16, textAlign: 'center' }}>
-        Se pueden reusar en varias partidas. Borrar acá es definitivo.
-      </p>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 36 }}>🧑‍🤝‍🧑</div>
+        <h1 style={{ fontSize: 28, marginTop: 6 }}>Personajes</h1>
+        <p className="subtle" style={{ maxWidth: 360 }}>
+          Se pueden reusar en varias partidas. Borrar acá es definitivo.
+        </p>
+      </div>
 
-      {error ? <div style={{ color: '#e74c3c' }}>{error}</div> : null}
+      {error ? <div className="error-box">{error}</div> : null}
 
-      <div style={{ width: '100%', maxWidth: 700, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {personajes === null && !error ? <div style={{ opacity: 0.6, textAlign: 'center' }}>Cargando…</div> : null}
+      <div className="page-wide" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {personajes === null && !error ? <div className="subtle" style={{ textAlign: 'center' }}>Cargando…</div> : null}
 
         {personajes?.length === 0 ? (
-          <div style={{ opacity: 0.6, textAlign: 'center' }}>Todavía no hay ningún personaje creado.</div>
+          <div className="card" style={{ textAlign: 'center' }}>
+            <div className="subtle">Todavía no hay ningún personaje creado.</div>
+          </div>
         ) : null}
 
         {personajes?.map((p) => (
-          <div
-            key={p.id}
-            style={{
-              border: '1px solid #333',
-              borderRadius: 12,
-              padding: 16,
-              background: '#181818',
-              opacity: borrando === p.id ? 0.5 : 1,
-            }}
-          >
+          <div key={p.id} className="card" style={{ opacity: borrando === p.id ? 0.5 : 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: 12, opacity: 0.5, letterSpacing: 1 }}>{p.jugador.toUpperCase()}</div>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{p.nombre}</div>
-                <div style={{ opacity: 0.7 }}>{obtenerArquetipo(p.arquetipo)?.nombre ?? p.arquetipo}</div>
+                <span className="badge">{p.jugador === 'hijo' ? 'Hijo' : 'Papá'}</span>
+                <div style={{ fontSize: 22, fontWeight: 800, marginTop: 6 }}>{p.nombre}</div>
+                <div className="subtle">{obtenerArquetipo(p.arquetipo)?.nombre ?? p.arquetipo}</div>
               </div>
 
               {confirmando !== p.id ? (
@@ -104,50 +99,47 @@ export default function PaginaPersonajesGlobal() {
                   onClick={() => setConfirmando(p.id)}
                   disabled={borrando === p.id}
                   title="Borrar este personaje"
-                  style={{ background: 'transparent', border: 'none', color: '#e74c3c', fontSize: 18, cursor: 'pointer' }}
+                  className="btn-icon"
                 >
                   🗑
                 </button>
               ) : null}
             </div>
 
-            <div style={{ marginTop: 10, display: 'flex', gap: 20 }}>
+            <div style={{ marginTop: 12, display: 'flex', gap: 20, fontWeight: 700 }}>
               <span>Fuerza {p.fuerza}</span>
               <span>Astucia {p.astucia}</span>
               <span>Corazón {p.corazon}</span>
             </div>
-            <div style={{ marginTop: 6, fontSize: 14, opacity: 0.7 }}>
-              HP {p.hp}/{p.hp_max} · {p.capitulos_jugados} {p.capitulos_jugados === 1 ? 'capítulo jugado' : 'capítulos jugados'}
+            <div className="subtle" style={{ marginTop: 8, fontSize: 14 }}>
+              <span className="hearts-full">{'♥'.repeat(p.hp)}</span>
+              <span className="hearts-empty">{'♥'.repeat(Math.max(0, p.hp_max - p.hp))}</span>
+              {' · '}
+              {p.capitulos_jugados} {p.capitulos_jugados === 1 ? 'capítulo jugado' : 'capítulos jugados'}
             </div>
             {p.items.length > 0 ? (
-              <div style={{ marginTop: 4, fontSize: 14, opacity: 0.7 }}>Inventario: {p.items.map((i) => i.nombre).join(', ')}</div>
+              <div className="subtle" style={{ marginTop: 4, fontSize: 14 }}>Inventario: {p.items.map((i) => i.nombre).join(', ')}</div>
             ) : null}
-            {p.debilidad ? <div style={{ marginTop: 4, fontSize: 14, opacity: 0.7 }}>Debilidad: {p.debilidad}</div> : null}
+            {p.debilidad ? <div className="subtle" style={{ marginTop: 4, fontSize: 14 }}>Debilidad: {p.debilidad}</div> : null}
             {p.campanias.length > 0 ? (
-              <div style={{ marginTop: 4, fontSize: 14, opacity: 0.5 }}>
+              <div className="faint" style={{ marginTop: 4, fontSize: 13 }}>
                 Jugando en: {p.campanias.map((c) => c.titulo).join(', ')}
               </div>
             ) : null}
 
             {confirmando === p.id ? (
-              <div style={{ marginTop: 12, padding: 12, background: '#241414', borderRadius: 8 }}>
-                <div style={{ fontSize: 14, marginBottom: 8 }}>
+              <div style={{ marginTop: 14, padding: 14, background: 'var(--danger-bg)', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ fontSize: 14, marginBottom: 10 }}>
                   ¿Borrar a {p.nombre} para siempre?
                   {p.campanias.length > 0
                     ? ` Está jugando en ${p.campanias.length === 1 ? 'esta partida' : 'estas partidas'}: ${p.campanias.map((c) => c.titulo).join(', ')}. También sale de ahí.`
                     : ''}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => confirmarBorrado(p.id)}
-                    style={{ background: '#e74c3c', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}
-                  >
+                  <button onClick={() => confirmarBorrado(p.id)} className="btn btn-danger" style={{ padding: '8px 16px', fontSize: 14 }}>
                     Sí, borrar
                   </button>
-                  <button
-                    onClick={() => setConfirmando(null)}
-                    style={{ background: 'transparent', color: '#aaa', border: '1px solid #444', borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}
-                  >
+                  <button onClick={() => setConfirmando(null)} className="btn btn-outline" style={{ padding: '8px 16px', fontSize: 14 }}>
                     Cancelar
                   </button>
                 </div>
